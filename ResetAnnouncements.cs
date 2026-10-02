@@ -115,7 +115,7 @@ internal sealed class ResetAnnouncementClient : IDisposable
     {
         http = handler is null ? new HttpClient() : new HttpClient(handler);
         http.Timeout = TimeSpan.FromSeconds(10);
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("CodexBar/1.1.1");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("CodexBar-MajorCommand/" + EditionVersion.Current);
         this.clock = clock ?? (() => DateTimeOffset.UtcNow);
     }
 

@@ -4,6 +4,15 @@ All notable changes to CodexBar are documented here.
 
 ## [Unreleased]
 
+No changes yet.
+
+## [1.2.0-beta.1] - 2026-10-02
+
+First public beta of **CodexBar — MajorCommand Edition**, an independent GPL-3.0-only fork of jspann21's CodexBar. Preserves the original project credit, settings and startup identity.
+
+- Adds a public GitHub release check on launch and daily, with manual checks, a tray notice and an Update available download-page menu item. Beta builds receive beta/stable updates; stable builds exclude betas. Requests are bounded, cancellable and respect GitHub retry delays. Failures are visible and installation remains manual.
+- Provides a Windows x64 lightweight EXE and portable ZIP, matching tagged source, licence, release notes and SHA-256 checksums.
+
 - Adds Codex Resets announcement data on both faces with a saved Crown or Bottom menu choice. Both layouts add 24 pixels while retaining the 290-pixel width; the shaped crown and title strip support dragging without hover expansion. Announced and possible reset text is yellow, with an underlined Source link and tracker credit/details in the tooltip and menu.
 - Clarifies the countdown as "Reset Announced in ~8h", lowers crown text by three logical pixels and gives compact percentage labels two more pixels of space above the progress bar.
 - Reads the independent tracker's public status API every five minutes using conditional requests, bounded requests and server retry delays. Distinguishes scheduled announcements, speculative/expired forecasts, no announcement and stale/offline data; passed scheduled times await confirmation. Account usage, forecasts and reset-credit values remain independent.
@@ -50,7 +59,8 @@ All notable changes to CodexBar are documented here.
 - Live weekly Codex capacity and reset-time display.
 - Configurable refresh interval, transparency, always-on-top mode, Windows startup, and notification-area support.
 
-[Unreleased]: https://github.com/jspann21/codex-bar/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/majorcommand/codex-bar/compare/v1.2.0-beta.1...HEAD
+[1.2.0-beta.1]: https://github.com/majorcommand/codex-bar/compare/v1.1.1...v1.2.0-beta.1
 [1.1.1]: https://github.com/jspann21/codex-bar/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/jspann21/codex-bar/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/jspann21/codex-bar/releases/tag/v1.0.0

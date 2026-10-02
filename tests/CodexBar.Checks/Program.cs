@@ -517,6 +517,8 @@ internal static class Checks
             sessionEntry.GetProperty("session").GetString()!.Length == 32);
 
         ResetAnnouncementChecks.Run(Check);
+        ReleaseUpdateChecks.Run(Check);
+        CheckReleaseUpdateMenu();
         CheckAnnouncementLayouts(output);
         if (args.Contains("--live-reset-check"))
         {
@@ -529,7 +531,51 @@ internal static class Checks
             Console.WriteLine("Live tracker: " + live!.Label(DateTimeOffset.Now));
         }
 
+        if (args.Contains("--live-release-check"))
+        {
+            var updates = Task.Run(async () =>
+            {
+                using var client = new ReleaseUpdateClient();
+                var installed = await client.ReadAsync(EditionVersion.Current);
+                var older = await client.ReadAsync(EditionVersion.Parse("1.2.0-beta.0")!);
+                return (installed, older);
+            }).GetAwaiter().GetResult();
+            Check("Live GitHub releases do not offer an update to this beta", updates.installed is null);
+            Check("Live GitHub release is discoverable by an earlier beta", updates.older?.Version == EditionVersion.Current);
+        }
         Console.WriteLine($"PASS: {passed} checks. Rendered fixtures: {output ?? "not requested"}");
+    }
+
+    private static void CheckReleaseUpdateMenu()
+    {
+        var unavailable = false;
+        var newer = true;
+        using var handler = new ResetAnnouncementChecks.Handler((_, _) => Task.FromResult(unavailable
+            ? new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.BadGateway)
+            : ResetAnnouncementChecks.JsonResponse(newer
+                ? ReleaseUpdateChecks.Releases(ReleaseUpdateChecks.Release("v1.2.0-beta.2")) : "[]")));
+        using var widget = new WidgetForm(new AppSettings { AlwaysOnTop = false },
+            releaseUpdateClient: new ReleaseUpdateClient(handler));
+        foreach (var name in new[] { "refreshTimer", "positionSaveTimer", "hoverTimer", "topmostTimer" })
+            ((System.Windows.Forms.Timer)Get(widget, name)!).Stop();
+        ((NotifyIcon)Get(widget, "trayIcon")!).Visible = false;
+        var timer = (System.Windows.Forms.Timer)Get(widget, "updateTimer")!;
+        Check("Update checks are daily and isolated forms never check automatically", timer.Interval == 86_400_000 && !timer.Enabled && handler.Calls == 0);
+        var check = (ToolStripMenuItem)widget.ContextMenuStrip!.Items["checkUpdates"]!;
+        var download = (ToolStripMenuItem)widget.ContextMenuStrip.Items["availableUpdate"]!;
+        var originalSize = widget.Size;
+        ((Task)Invoke(widget, "RefreshUpdatesAsync", false)!).GetAwaiter().GetResult();
+        Check("Actual form exposes a new beta download without resizing", download.Available && download.Text!.Contains("1.2.0-beta.2") &&
+            Get(widget, "availableUpdate") is ReleaseUpdate && widget.Size == originalSize);
+        ((Task)Invoke(widget, "RefreshUpdatesAsync", true)!).GetAwaiter().GetResult();
+        Check("Repeated manual clicks are throttled", handler.Calls == 1);
+        unavailable = true;
+        ((Task)Invoke(widget, "RefreshUpdatesAsync", false)!).GetAwaiter().GetResult();
+        Check("Failed form update checks retain the known download and expose failure", download.Available && check.Text!.Contains("unavailable") && check.Enabled);
+        unavailable = false;
+        newer = false;
+        ((Task)Invoke(widget, "RefreshUpdatesAsync", false)!).GetAwaiter().GetResult();
+        Check("Form update status recovers and removes obsolete notice", !download.Available && check.Text!.Contains("up to date") && Get(widget, "availableUpdate") is null);
     }
 
     private static void CheckAnnouncementLayouts(string? output)

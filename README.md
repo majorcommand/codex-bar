@@ -1,6 +1,12 @@
-# CodexBar
+# CodexBar — MajorCommand Edition
 
 **A tiny Windows desktop widget for keeping an eye on your weekly Codex limit.**
+
+An independently maintained fork of [jspann21's CodexBar](https://github.com/jspann21/codex-bar), with usage forecasts, two compact faces, reset announcements and visibility diagnostics. The original author created CodexBar; MajorCommand maintains this edition. This project is not affiliated with OpenAI or endorsed by the original author.
+
+**[Download the public beta](https://github.com/majorcommand/codex-bar/releases/tag/v1.2.0-beta.1)** · [All releases](https://github.com/majorcommand/codex-bar/releases) · [Report an issue](https://github.com/majorcommand/codex-bar/issues) · [Changelog](CHANGELOG.md)
+
+The first MajorCommand release is **1.2.0-beta.1**. The design has been tested locally, but long-running visibility behavior is still being monitored. Please include the version and circumstances when reporting a problem.
 
 CodexBar itself requires no login, API key, or account setup—it automatically reuses your existing signed-in Codex session. Its main face shows remaining weekly capacity, average daily usage, and an estimated forecast. Click to switch to the reset-details face, with larger dates and times for the next weekly reset and every available banked reset expiry. It stays out of the way as a compact, draggable widget and continues updating from the Windows notification area.
 
@@ -32,6 +38,7 @@ These examples demonstrate both announcement layouts. Choose **Reset announcemen
 - Offers a saved Show in taskbar option while the widget remains visible; the notification-area icon stays available
 - Supports adjustable transparency and always-on-top mode
 - Can launch automatically when Windows starts
+- Checks this edition's GitHub releases for updates and offers a download-page link
 - Can notify you by email when weekly capacity resets to fully available
 - Actively fetches current limits through Codex's supported local app-server interface
 - Roughly 300 KB as a framework-dependent Windows executable
@@ -84,6 +91,7 @@ Preferences persist between launches.
 | Usage notifications | SMTP | On, unconfigured | Sends one alert when observed weekly usage returns to zero and SMTP is configured. |
 | Send test alert | — | — | Exercises the configured notification delivery without changing reset tracking. |
 | Refresh now | — | — | Requests the current account limit and reset-announcement status immediately, respecting tracker retry delays. |
+| Check for updates | — | On launch and daily | Checks published MajorCommand releases; also available manually. Opens a download page when an update exists. |
 
 Preferences are stored at:
 
@@ -119,6 +127,12 @@ Announcement data comes from [Codex Resets](https://codex-resets.com/), an indep
 
 These reports do not change your weekly countdown, usage forecast, warning colour or banked credits. Those continue to come from your actual account limits. The source credit and link appear in both layouts.
 
+### Release updates
+
+The widget checks the [MajorCommand GitHub releases](https://github.com/majorcommand/codex-bar/releases) on launch and every 24 hours while running. Choose **Check for updates** for a manual check; repeated manual requests wait five minutes. A newer downloadable Windows x64 release adds **Update available · version ↗** to the menu and triggers one tray notice per version per session. Clicking the menu item opens that release's download page. Code pushes alone do not trigger a notice.
+
+Beta builds receive newer betas and stable releases; stable builds receive stable releases only. Drafts and releases without a downloadable Windows build are excluded. Checks use GitHub's public API without credentials or account usage data, conditional requests where available, a ten-second deadline, bounded response sizes and server retry delays. A failed check says **unavailable**, retaining any previously verified update link. No files are downloaded, replaced or installed automatically.
+
 ## Privacy and security
 
 - No Codex credentials, access tokens, or API keys are requested or stored.
@@ -130,7 +144,20 @@ These reports do not change your weekly countdown, usage forecast, warning colou
 
 ### Download a release
 
-Download `CodexBar.exe` from the repository's **Releases** page and run it. The lightweight build requires the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/en-us/download/dotnet/10.0). A portable release may also be provided for computers without .NET installed.
+Download from [MajorCommand's Releases page](https://github.com/majorcommand/codex-bar/releases/tag/v1.2.0-beta.1):
+
+- **Portable ZIP:** `CodexBar-MajorCommand-win-x64-portable.zip` includes the .NET runtime. Extract the entire ZIP into a permanent folder, then run `CodexBar.exe`. This is the simplest option if you do not already have .NET installed.
+- **Lightweight EXE:** `CodexBar.exe` requires the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/en-us/download/dotnet/10.0). The release also includes `LICENSE`, `CHANGELOG.md` and `SHA256SUMS.txt`.
+
+These downloads target Windows 10/11 on x64. ARM64 builds can be produced from source using the command below.
+
+**Start with Windows is enabled on first launch** for the current user. Keep the executable in a permanent location before launching; turn startup Off in the tray menu if unwanted. Hover expansion defaults to Off, always on top to On, and showing a running-window button in the taskbar to Off. Existing saved preferences are retained.
+
+To update, download/extract the new version, choose **Exit** from the old widget's tray menu, and replace the files in the same permanent folder. Launch the new EXE. If you move it to a different folder, turn **Start with Windows** Off and On to update the startup path. Settings remain in `%LOCALAPPDATA%\CodexBar\settings.json`.
+
+This edition shares CodexBar's existing settings, startup entry and single-instance guard. Exit another CodexBar copy before launching it. Do not run the original and this edition together.
+
+Each release is built from its matching tag. GitHub's source archives provide the matching GPL source; the ZIP includes the GPL licence and original project credit in this README. Use `Get-FileHash .\CodexBar.exe -Algorithm SHA256` (or the ZIP filename) to compare a download with `SHA256SUMS.txt`.
 
 Windows may show a SmartScreen warning for unsigned community-built executables. Choose **More info → Run anyway** only if you downloaded the file from a release you trust.
 
@@ -193,6 +220,7 @@ WidgetForm.cs      Widget UI, tray menu, rendering, and refresh behavior
 UsagePace.cs       Weekly-cycle average and forecast calculation
 VisibilityLog.cs   Rotating local visibility diagnostics
 ResetAnnouncements.cs  Independent reset status, validation and HTTP client
+ReleaseUpdates.cs  MajorCommand release versioning and public update checks
 CodexAppServerClient.cs  Live authenticated Codex rate-limit client
 AppSettings.cs     Persistent preferences and Windows startup setting
 build.ps1          Lightweight and portable publishing script
@@ -219,6 +247,12 @@ The checks render sample faces to the optional output folder. They do not contac
 
 Announcement checks use isolated HTTP fixtures by default. To additionally make one read-only request to the live public tracker through the actual client, append `--live-reset-check` after the output path.
 
+Update checks also use isolated HTTP fixtures and exercise the actual menu without downloading files, opening a browser or contacting GitHub. Tests cover beta/stable ordering, invalid metadata, response limits, cancellation, timeouts, retry delays and recovery.
+
+After this beta is published, append `--live-release-check` to verify the public release through the real client, including detection from an earlier beta version. This makes credential-free, read-only GitHub requests.
+
 ## License
 
 CodexBar is licensed under the GNU General Public License, version 3 only (`GPL-3.0-only`). See [LICENSE](LICENSE) for the full license text.
+
+Original project: [jspann21/codex-bar](https://github.com/jspann21/codex-bar). MajorCommand Edition preserves the original project history and licence. You may modify and redistribute this edition under that licence; provide matching source and retain the required notices.

@@ -5,11 +5,13 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <Version>1.2.0-beta.1</Version>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../UsagePace.cs" Link="UsagePace.cs" />
     <Compile Include="../../VisibilityLog.cs" Link="VisibilityLog.cs" />
     <Compile Include="../../ResetAnnouncements.cs" Link="ResetAnnouncements.cs" />
+    <Compile Include="../../ReleaseUpdates.cs" Link="ReleaseUpdates.cs" />
     <Compile Include="../../WidgetForm.cs" Link="WidgetForm.cs" />
     <Compile Include="../../AppSettings.cs" Link="AppSettings.cs" />
     <Compile Include="../../CodexAppServerClient.cs" Link="CodexAppServerClient.cs" />

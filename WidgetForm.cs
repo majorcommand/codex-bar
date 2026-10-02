@@ -33,6 +33,14 @@ internal sealed class WidgetForm : Form
     private bool diagnosticWarningShown;
     private readonly CodexAppServerClient liveClient = new();
     private readonly ResetAnnouncementClient announcementClient;
+    private readonly ReleaseUpdateClient updateClient;
+    private readonly CancellationTokenSource updateCancellation = new();
+    private readonly System.Windows.Forms.Timer updateTimer;
+    private readonly EditionVersion editionVersion = EditionVersion.Current;
+    private ReleaseUpdate? availableUpdate;
+    private bool updateRefreshing;
+    private string? notifiedUpdate;
+    private DateTimeOffset nextManualUpdateCheck;
     private readonly CancellationTokenSource announcementCancellation = new();
     private readonly System.Windows.Forms.Timer announcementTimer;
     private readonly ToolTip announcementTip = new();
@@ -153,13 +161,14 @@ internal sealed class WidgetForm : Form
     }
 
     public WidgetForm(AppSettings? preferences = null, VisibilityLog? diagnostics = null,
-        ResetAnnouncementClient? resetAnnouncementsClient = null)
+        ResetAnnouncementClient? resetAnnouncementsClient = null, ReleaseUpdateClient? releaseUpdateClient = null)
     {
         // Injected preferences keep isolated checks away from the user's log.
         visibilityLog = diagnostics ?? (preferences is null ? new VisibilityLog() : null);
         settings = preferences ?? AppSettings.Load();
         isolatedPreferences = preferences is not null;
         announcementClient = resetAnnouncementsClient ?? new ResetAnnouncementClient();
+        updateClient = releaseUpdateClient ?? new ReleaseUpdateClient();
         if (!Enum.IsDefined(settings.ResetAnnouncementPlacement))
             settings.ResetAnnouncementPlacement = AnnouncementPlacement.Bottom;
         Exception? startupError = null;
@@ -171,7 +180,7 @@ internal sealed class WidgetForm : Form
             }
             catch (Exception ex) { startupError = ex; }
         }
-        Text = "CodexBar";
+        Text = "CodexBar — MajorCommand Edition";
         FormBorderStyle = FormBorderStyle.None;
         ApplyTaskbarVisibility(true);
         StartPosition = FormStartPosition.Manual;
@@ -243,7 +252,10 @@ internal sealed class WidgetForm : Form
         announcementTimer = new System.Windows.Forms.Timer { Interval = 300_000 };
         announcementTimer.Tick += async (_, _) => await RefreshAnnouncementsAsync();
         if (!isolatedPreferences) announcementTimer.Start();
-        Shown += async (_, _) => await Task.WhenAll(RefreshUsageAsync(), RefreshAnnouncementsAsync());
+        updateTimer = new System.Windows.Forms.Timer { Interval = 86_400_000 };
+        updateTimer.Tick += async (_, _) => await RefreshUpdatesAsync();
+        if (!isolatedPreferences) updateTimer.Start();
+        Shown += async (_, _) => await Task.WhenAll(RefreshUsageAsync(), RefreshAnnouncementsAsync(), RefreshUpdatesAsync());
         LocationChanged += (_, _) => QueuePositionSave();
         FormClosing += OnFormClosing;
         KeyPreview = true;
@@ -849,6 +861,13 @@ internal sealed class WidgetForm : Form
         menu.Items.Add("Switch face", null, (_, _) => ToggleFace());
         menu.Items.Add("Refresh now", null, async (_, _) =>
             await Task.WhenAll(RefreshUsageAsync(), RefreshAnnouncementsAsync()));
+        menu.Items.Add(new ToolStripMenuItem($"MajorCommand Edition · {editionVersion}") { Enabled = false });
+        var downloadUpdate = new ToolStripMenuItem("Update available…") { Name = "availableUpdate", Visible = false };
+        downloadUpdate.Click += (_, _) => OpenUpdatePage();
+        menu.Items.Add(downloadUpdate);
+        var checkUpdates = new ToolStripMenuItem("Check for updates") { Name = "checkUpdates" };
+        checkUpdates.Click += async (_, _) => await RefreshUpdatesAsync(manual: true);
+        menu.Items.Add(checkUpdates);
 
         var announcementLayout = new ToolStripMenuItem("Reset announcements") { Name = "resetAnnouncements" };
         foreach (var placement in new[] { AnnouncementPlacement.Bottom, AnnouncementPlacement.Crown })
@@ -988,6 +1007,74 @@ internal sealed class WidgetForm : Form
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Exit", null, (_, _) => { RecordVisibility("exit-request", "tray-menu"); exiting = true; Close(); });
         return menu;
+    }
+
+    private async Task RefreshUpdatesAsync(bool manual = false)
+    {
+        if (updateRefreshing || exiting || Disposing || IsDisposed) return;
+        if (manual && DateTimeOffset.UtcNow < nextManualUpdateCheck)
+        {
+            if (!isolatedPreferences) trayIcon.ShowBalloonTip(2500, "CodexBar — MajorCommand Edition",
+                "Please wait five minutes between update checks.", ToolTipIcon.Info);
+            return;
+        }
+        updateRefreshing = true;
+        updateTimer.Stop();
+        var check = (ToolStripMenuItem)trayIcon.ContextMenuStrip!.Items["checkUpdates"]!;
+        var download = (ToolStripMenuItem)trayIcon.ContextMenuStrip.Items["availableUpdate"]!;
+        check.Text = "Checking for updates…";
+        check.Enabled = false;
+        nextManualUpdateCheck = DateTimeOffset.UtcNow.AddMinutes(5);
+        try
+        {
+            var update = await updateClient.ReadAsync(editionVersion, updateCancellation.Token);
+            if (exiting || Disposing || IsDisposed) return;
+            availableUpdate = update;
+            download.Visible = update is not null;
+            download.Text = $"Update available · {update?.Version} ↗";
+            check.Text = update is null ? "Check for updates — up to date" : "Check for updates";
+            check.ToolTipText = $"Last checked {DateTimeOffset.Now:g}. Downloads open in your browser; installation is manual.";
+            if (update is not null && notifiedUpdate != update.Version.ToString())
+            {
+                notifiedUpdate = update.Version.ToString();
+                if (!isolatedPreferences) trayIcon.ShowBalloonTip(5000, "CodexBar update available",
+                    $"MajorCommand Edition {update.Version} is available. Right-click the widget or tray icon and choose Update available.", ToolTipIcon.Info);
+            }
+            else if (manual && update is null && !isolatedPreferences)
+                trayIcon.ShowBalloonTip(2500, "CodexBar — MajorCommand Edition", "You have the latest release for your update channel.", ToolTipIcon.Info);
+        }
+        catch (OperationCanceledException) when (updateCancellation.IsCancellationRequested) { }
+        catch (Exception ex)
+        {
+            if (exiting || Disposing || IsDisposed) return;
+            // Keep a previously verified download notice, but do not claim the failed check succeeded.
+            check.Text = "Check for updates — unavailable";
+            check.ToolTipText = "Could not check GitHub. Try again later; previously found updates remain available.";
+            Trace.WriteLine($"CodexBar: update check failed: {ex.GetType().Name}");
+            if (manual && !isolatedPreferences) trayIcon.ShowBalloonTip(3500, "CodexBar — MajorCommand Edition",
+                "Could not check for updates. Check your connection and try again later.", ToolTipIcon.Warning);
+        }
+        finally
+        {
+            updateRefreshing = false;
+            if (!exiting && !Disposing && !IsDisposed)
+            {
+                check.Enabled = true;
+                if (!isolatedPreferences) updateTimer.Start();
+            }
+        }
+    }
+
+    private void OpenUpdatePage()
+    {
+        if (availableUpdate is null) return;
+        try { Process.Start(new ProcessStartInfo(availableUpdate.PageUrl) { UseShellExecute = true }); }
+        catch (Exception ex)
+        {
+            Trace.WriteLine($"CodexBar: could not open release page: {ex.GetType().Name}");
+            trayIcon.ShowBalloonTip(3500, "CodexBar — MajorCommand Edition",
+                "Could not open the download page. Visit github.com/majorcommand/codex-bar/releases.", ToolTipIcon.Warning);
+        }
     }
 
     private void ReportStartupError(Exception error)
@@ -1620,6 +1707,10 @@ internal sealed class WidgetForm : Form
     {
         if (disposing)
         {
+            updateCancellation.Cancel();
+            updateClient.Dispose();
+            updateTimer.Dispose();
+            updateCancellation.Dispose();
             announcementCancellation.Cancel();
             announcementClient.Dispose();
             announcementTimer.Dispose();
