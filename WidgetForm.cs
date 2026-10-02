@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.Mail;
 using System.Drawing.Drawing2D;
+using System.Globalization;
 using System.Runtime.InteropServices;
 
 namespace CodexBar;
@@ -82,6 +83,8 @@ internal sealed class WidgetForm : Form
     private readonly SolidBrush trackBrush = new(Color.FromArgb(31, 39, 34));
     private readonly SolidBrush usageBrush = new(Color.FromArgb(46, 220, 112));
     private readonly SolidBrush countdownBrush = new(Color.FromArgb(46, 220, 112));
+    private readonly SolidBrush forecastWarningBrush = new(WarningBackground);
+    private readonly SolidBrush forecastWarningTextBrush = new(Color.Black);
     private UsageSnapshot? snapshot;
     private bool liveConnected;
     private string? readError;
@@ -812,13 +815,12 @@ internal sealed class WidgetForm : Form
         paceReset = snapshot.ResetsAt;
         pace = UsagePace.Calculate(snapshot.UsedPercent, snapshot.ResetsAt, snapshot.CapturedAt, abovePace);
         abovePace = pace?.AbovePace ?? false;
-        var warning = liveConnected && abovePace;
-        BackColor = warning ? WarningBackground : NormalBackground;
+        BackColor = NormalBackground;
         textBrush.Color = Color.FromArgb(240, 245, 241);
-        dimBrush.Color = warning ? Color.FromArgb(255, 219, 222) : Color.FromArgb(155, 174, 162);
+        dimBrush.Color = Color.FromArgb(155, 174, 162);
         controlPen.Color = dimBrush.Color;
-        borderPen.Color = warning ? Color.FromArgb(204, 106, 115) : Color.FromArgb(42, 58, 49);
-        trackBrush.Color = warning ? Color.FromArgb(91, 25, 33) : Color.FromArgb(31, 39, 34);
+        borderPen.Color = Color.FromArgb(42, 58, 49);
+        trackBrush.Color = Color.FromArgb(31, 39, 34);
     }
 
     private async Task RefreshUsageAsync()
@@ -1277,27 +1279,43 @@ internal sealed class WidgetForm : Form
 
     private void DrawUsageOverview(Graphics g, double remaining)
     {
-        var color = liveConnected && abovePace ? textBrush.Color : RemainingColor(remaining);
+        var forecast = RemainingAtResetText();
+        var warning = ForecastNeedsWarning();
+        var color = RemainingColor(remaining);
         usageBrush.Color = color;
         DrawProgress(g, remaining, color);
 
         var average = pace?.AveragePerDay is { } daily
             ? daily < 100 ? $"{daily:0.#}%" : $"{daily:0}%" : "—";
-        var forecast = !liveConnected ? "—" : pace?.Exhausted == true ? "0%"
-            : pace?.RemainingAtReset is { } projected ? $"{Math.Clamp(projected, 0, 100):0}%" : "—";
         using var centered = new StringFormat(StringFormat.GenericTypographic)
         {
             Alignment = StringAlignment.Center,
             FormatFlags = StringFormatFlags.NoWrap
         };
         var left = (LogicalWidth - 269) / 2f;
+        if (warning) g.FillRectangle(forecastWarningBrush, left + 171, 32, 98, 49);
         g.DrawString($"{remaining:0}%", percentFont, usageBrush, new RectangleF(left, 31, 94, 44), centered);
         g.DrawString(average, compactPercentFont, usageBrush, new RectangleF(left + 93, 34, 77, 34), centered);
-        g.DrawString(forecast, compactPercentFont, usageBrush, new RectangleF(left + 171, 34, 98, 34), centered);
+        g.DrawString(forecast, compactPercentFont, warning ? forecastWarningTextBrush : usageBrush, new RectangleF(left + 171, 34, 98, 34), centered);
         g.DrawString("Weekly Left", compactLabelFont, dimBrush, new RectangleF(left, 66, 94, 15), centered);
         g.DrawString("Day Average", compactLabelFont, dimBrush, new RectangleF(left + 93, 66, 77, 15), centered);
-        g.DrawString("Remaining at Reset", compactLabelFont, dimBrush, new RectangleF(left + 171, 66, 98, 15), centered);
+        g.DrawString("Remaining at Reset", compactLabelFont, warning ? forecastWarningTextBrush : dimBrush, new RectangleF(left + 171, 66, 98, 15), centered);
     }
+
+    private string RemainingAtResetText()
+    {
+        if (!liveConnected) return "—";
+        if (pace?.RemainingAtReset is { } projected)
+        {
+            var text = $"{Math.Min(projected, 100):0}%";
+            // Avoid a negative-zero label after rounding a small shortfall.
+            return text == CultureInfo.CurrentCulture.NumberFormat.NegativeSign + "0%" ? "0%" : text;
+        }
+        return pace?.Exhausted == true ? "0%" : "—";
+    }
+
+    private bool ForecastNeedsWarning() => liveConnected &&
+        (RemainingAtResetText() == "0%" || pace?.RemainingAtReset < 0);
 
     private string OverviewTitle()
     {
@@ -1322,7 +1340,7 @@ internal sealed class WidgetForm : Form
 
     private void DrawExpandedUsage(Graphics g, double remaining)
     {
-        var color = liveConnected && abovePace ? textBrush.Color : RemainingColor(remaining);
+        var color = RemainingColor(remaining);
         usageBrush.Color = color;
         g.DrawString($"{remaining:0}%", expandedPercentFont, usageBrush, 16, 36);
         g.DrawString("of week left", bodyFont, dimBrush, 174, 73);
@@ -1342,7 +1360,9 @@ internal sealed class WidgetForm : Form
         else if (pace.AbovePace) forecast = $"Runs out in ~{FormatDays(pace.DaysOfCapacity!.Value)} at this pace";
         else if (pace.RemainingAtReset < 0.5) forecast = "Near weekly limit · little headroom";
         else forecast = $"On track · ~{pace.RemainingAtReset:0}% left at reset";
-        g.DrawString(forecast, expandedForecastFont, textBrush, 20, 183);
+        var warning = ForecastNeedsWarning();
+        if (warning) g.FillRectangle(forecastWarningBrush, 16, 180, WidgetWidth - 32, 25);
+        g.DrawString(forecast, expandedForecastFont, warning ? forecastWarningTextBrush : textBrush, 20, 183);
         DrawFooter(g);
     }
 
@@ -1408,7 +1428,7 @@ internal sealed class WidgetForm : Form
             new RectangleF(20, y + (dateFont.Height - fittedDateFont.Height) / 2f, dateWidth, 22), format);
         format.Alignment = StringAlignment.Far;
         var brush = timeLeft is "Offline" or "Unknown" or "Expired" or "—" ? dimBrush
-            : abovePace ? textBrush : countdownBrush;
+            : countdownBrush;
         g.DrawString(timeLeft, dateFont, brush,
             new RectangleF(LogicalWidth - 20 - countdownWidth, y, countdownWidth, 22), format);
     }
@@ -1745,6 +1765,8 @@ internal sealed class WidgetForm : Form
             trackBrush.Dispose();
             usageBrush.Dispose();
             countdownBrush.Dispose();
+            forecastWarningBrush.Dispose();
+            forecastWarningTextBrush.Dispose();
             refreshGate.Dispose();
         }
         base.Dispose(disposing);

@@ -5,7 +5,7 @@ using CodexBar;
 
 internal static class ReleaseUpdateChecks
 {
-    private static readonly EditionVersion Beta = EditionVersion.Parse("1.2.0-beta.1")!;
+    private static readonly EditionVersion Beta = EditionVersion.Parse("1.2.0-beta.2")!;
     internal static object Release(string tag, bool? prerelease = null, bool draft = false, bool assets = true,
         string? page = null) => new
     {
@@ -23,21 +23,21 @@ internal static class ReleaseUpdateChecks
         foreach (var invalid in new[] { "", "v1", "1.2", "1.2.3-rc.1", "01.2.3", "1.2.3-beta.01", "1.2.3+source", "999999999999.2.3", "1.2.3\n", "../evil" })
             check("Reject invalid edition version " + JsonSerializer.Serialize(invalid), EditionVersion.Parse(invalid) is null);
         check("Version ordering uses numeric components", EditionVersion.Parse("1.10.0")!.CompareTo(EditionVersion.Parse("1.9.9")) > 0 &&
-            EditionVersion.Parse("1.2.0-beta.10")!.CompareTo(EditionVersion.Parse("1.2.0-beta.2")) > 0);
+            EditionVersion.Parse("1.2.0-beta.10")!.CompareTo(EditionVersion.Parse("1.2.0-beta.3")) > 0);
         check("Stable release follows its beta", EditionVersion.Parse("1.2.0")!.CompareTo(Beta) > 0 &&
             EditionVersion.Parse("1.3.0-beta.1")!.CompareTo(EditionVersion.Parse("1.2.0")) > 0);
         check("No releases and current release show no update", ReleaseUpdateClient.Select("[]", Beta) is null &&
-            ReleaseUpdateClient.Select(Releases(Release("v1.2.0-beta.1")), Beta) is null);
+            ReleaseUpdateClient.Select(Releases(Release("v1.2.0-beta.2")), Beta) is null);
         check("Beta users receive next beta even when stable latest is older",
-            ReleaseUpdateClient.Select(Releases(Release("v1.1.1"), Release("v1.2.0-beta.2")), Beta)?.Version == EditionVersion.Parse("1.2.0-beta.2"));
+            ReleaseUpdateClient.Select(Releases(Release("v1.1.1"), Release("v1.2.0-beta.3")), Beta)?.Version == EditionVersion.Parse("1.2.0-beta.3"));
         check("Stable users ignore beta releases", ReleaseUpdateClient.Select(Releases(Release("v1.3.0-beta.1")), EditionVersion.Parse("1.2.0")!) is null);
         check("Beta users receive stable releases", ReleaseUpdateClient.Select(Releases(Release("v1.2.0")), Beta)?.Version == EditionVersion.Parse("1.2.0"));
         check("Selection chooses highest version rather than API ordering", ReleaseUpdateClient.Select(Releases(
-            Release("v1.2.0-beta.10"), Release("v1.2.0-beta.2")), Beta)?.Version == EditionVersion.Parse("1.2.0-beta.10"));
+            Release("v1.2.0-beta.10"), Release("v1.2.0-beta.3")), Beta)?.Version == EditionVersion.Parse("1.2.0-beta.10"));
         check("Drafts, mismatched channels and source-only releases are excluded", ReleaseUpdateClient.Select(Releases(
             Release("v1.3.0", draft: true), Release("v1.4.0", prerelease: true), Release("v1.5.0", assets: false)), Beta) is null);
         check("External download pages fail closed", FailsSync(() => ReleaseUpdateClient.Select(
-            Releases(Release("v1.2.0-beta.2", page: "https://example.com/evil")), Beta)));
+            Releases(Release("v1.2.0-beta.3", page: "https://example.com/evil")), Beta)));
         check("Malformed release metadata is unavailable", FailsSync(() => ReleaseUpdateClient.Select("{}", Beta)) &&
             FailsSync(() => ReleaseUpdateClient.Select("[{}]", Beta)));
         Task.Run(() => ClientChecks(check)).GetAwaiter().GetResult();
@@ -57,7 +57,7 @@ internal static class ReleaseUpdateChecks
                 etagSent = request.Headers.IfNoneMatch.Any(value => value.Tag == "\"release-fixture\"");
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotModified));
             }
-            var response = ResetAnnouncementChecks.JsonResponse(Releases(Release("v1.2.0-beta.2")));
+            var response = ResetAnnouncementChecks.JsonResponse(Releases(Release("v1.2.0-beta.3")));
             response.Headers.ETag = new EntityTagHeaderValue("\"release-fixture\"");
             return Task.FromResult(response);
         });

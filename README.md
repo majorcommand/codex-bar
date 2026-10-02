@@ -4,9 +4,9 @@
 
 An independently maintained fork of [jspann21's CodexBar](https://github.com/jspann21/codex-bar), with usage forecasts, two compact faces, reset announcements and visibility diagnostics. The original author created CodexBar; MajorCommand maintains this edition. This project is not affiliated with OpenAI or endorsed by the original author.
 
-**[Download the public beta](https://github.com/majorcommand/codex-bar/releases/tag/v1.2.0-beta.1)** · [All releases](https://github.com/majorcommand/codex-bar/releases) · [Report an issue](https://github.com/majorcommand/codex-bar/issues) · [Changelog](CHANGELOG.md)
+**[Download the public beta](https://github.com/majorcommand/codex-bar/releases/tag/v1.2.0-beta.2)** · [All releases](https://github.com/majorcommand/codex-bar/releases) · [Report an issue](https://github.com/majorcommand/codex-bar/issues) · [Changelog](CHANGELOG.md)
 
-The first MajorCommand release is **1.2.0-beta.1**. The design has been tested locally, but long-running visibility behavior is still being monitored. Please include the version and circumstances when reporting a problem.
+The current MajorCommand release is **1.2.0-beta.2**. The design has been tested locally, but long-running visibility behavior is still being monitored. Please include the version and circumstances when reporting a problem.
 
 CodexBar itself requires no login, API key, or account setup—it automatically reuses your existing signed-in Codex session. Its main face shows remaining weekly capacity, average daily usage, and an estimated forecast. Click to switch to the reset-details face, with larger dates and times for the next weekly reset and every available banked reset expiry. It stays out of the way as a compact, draggable widget and continues updating from the Windows notification area.
 
@@ -20,6 +20,13 @@ CodexBar itself requires no login, API key, or account setup—it automatically 
 
 These examples demonstrate both announcement layouts. Choose **Reset announcements → Crown/Bottom** from the menu; the saved choice applies to both faces.
 
+
+**Forecast warning — illustrative data**
+
+![CodexBar with a dark face and a negative five percent forecast highlighted in muted red with black text](assets/forecast-warning.png)
+
+The warning highlights only **Remaining at Reset** when it displays zero or below. A negative value shows the projected shortfall, while actual weekly capacity stays separate.
+
 ## Highlights
 
 - Requires no separate login or API key—automatically reuses your existing Codex authentication
@@ -27,7 +34,7 @@ These examples demonstrate both announcement layouts. Choose **Reset announcemen
 - Displays the next reset in your local date and time
 - Lists the exact expiration date and time of every available banked rate-limit reset
 - Changes from green to amber to red as capacity runs low
-- Warns with a muted red face and white text when average usage predicts running out before reset
+- Highlights Remaining at Reset in muted red with black text when average usage predicts running out before reset
 - Switches between usage and reset details with a click; details grow vertically rather than shrinking the text
 - Keeps the main usage body at 290 × 100 logical pixels, with three prominent percentages, labels below them, reset countdown in the title and the progress bar below
 - Adds a 24-pixel reset-announcement strip on both faces, with a saved Crown or Bottom layout and yellow text for announced or possible resets
@@ -47,10 +54,10 @@ These examples demonstrate both announcement layouts. Choose **Reset announcemen
 
 - **Move:** use the title strip or announcement crown as a drag handle. Hovering either never expands the widget, and starting a drag there collapses hover content while keeping the handle under the pointer. Existing body dragging is also supported.
 - **Switch face:** click the body, press Space or Enter while focused, or choose **Switch face** from the tray menu. Title clicks and dragging do not switch faces.
-- **Reset details:** uses a 290-pixel width shared with the main face for readable date and countdown columns. Under **Full Weekly Reset**, the local date/time sits on the left and time remaining on the right. **Banked Reset Expiries** lists numbered date/time rows with matching right-aligned countdowns, without years or duplicate captions. Countdown text is green, or white on the red warning face. Long date rows fit their available space while keeping the countdown aligned to the right. Weekly time keeps decimal days; banked expiry days round to the nearest whole day, with hours shown below one day and expired entries marked explicitly. Countdown values use the latest successful observation; offline banked countdowns show a dash. Two banked resets fit in a 290 × 198 body, or 290 × 222 including the announcement strip. Very long lists are limited to the screen height; scroll the face to reach the remaining resets. Offline data is marked in the weekly countdown and last-read footer.
-- **Main face:** the large **Weekly Left** percentage sits beside **Day Average** and **Remaining at Reset** percentages at 80% of its font size. All three share the weekly capacity color and have centered labels below them; the title says how long **until reset**. When above pace, the red face uses white percentages and shows **0% Remaining at Reset**. Hover content includes the estimated time until exhaustion, and the reset-details face expands separately for readable dates.
+- **Reset details:** uses a 290-pixel width shared with the main face for readable date and countdown columns. Under **Full Weekly Reset**, the local date/time sits on the left and time remaining on the right. **Banked Reset Expiries** lists numbered date/time rows with matching right-aligned countdowns, without years or duplicate captions. Countdown text remains green on the dark reset-details face. Long date rows fit their available space while keeping the countdown aligned to the right. Weekly time keeps decimal days; banked expiry days round to the nearest whole day, with hours shown below one day and expired entries marked explicitly. Countdown values use the latest successful observation; offline banked countdowns show a dash. Two banked resets fit in a 290 × 198 body, or 290 × 222 including the announcement strip. Very long lists are limited to the screen height; scroll the face to reach the remaining resets. Offline data is marked in the weekly countdown and last-read footer.
+- **Main face:** the large **Weekly Left** percentage sits beside **Day Average** and **Remaining at Reset** percentages at 80% of its font size. The percentages normally share the weekly capacity color and have centered labels below them; the title says how long **until reset**. Whenever **Remaining at Reset** displays **0% or a negative percentage**, only that percentage and its label have a muted red background with black text, including forecasts rounded to zero. Negative values show the projected shortfall: for example, **−5%** means projected usage exceeds the weekly allowance by five percentage points. The rest of the face stays dark, and the other percentages and progress bar retain their capacity colour. Hover content highlights its forecast row and includes the estimated time until exhaustion, and the reset-details face expands separately for readable dates.
 - **Hover expansion:** enable **Expand on hover** from the right-click menu. Body entry waits 350 ms before expanding to 290 × 260 including the announcement strip; leaving the body (including moving to the title or announcement strip) waits 450 ms before collapsing to 290 × 124. Body reentry cancels collapse. Open menus postpone changes. Title-strip or crown dragging shrinks immediately once movement crosses the drag threshold; hover expansion stays suppressed after release until the pointer leaves and reenters the body. This option starts off and persists between launches.
-- **Reset announcements:** choose **Reset announcements → Bottom/Crown** from the menu; Bottom is the default and the choice applies to both faces. Either layout adds a fixed 24 pixels, so the compact widget is 290 × 124. The crown has a shaped outline with empty corners. Switching layouts preserves the title's screen position where screen bounds allow. Announced and possible resets use yellow text even on the red usage-warning face. Click the underlined **Source ↗** link to open Codex Resets; hovering the strip shows details and the last successful check. Clicking other strip text does not switch faces.
+- **Reset announcements:** choose **Reset announcements → Bottom/Crown** from the menu; Bottom is the default and the choice applies to both faces. Either layout adds a fixed 24 pixels, so the compact widget is 290 × 124. The crown has a shaped outline with empty corners. Switching layouts preserves the title's screen position where screen bounds allow. Announced and possible resets keep yellow text on the dark announcement strip, independently of the usage warning. Click the underlined **Source ↗** link to open Codex Resets; hovering the strip shows details and the last successful check. Clicking other strip text does not switch faces.
 - **Position:** larger faces fit inward when near a screen edge, then return to the compact face's original location. Body dragging moves that saved location by the same distance. Title-strip dragging collapses under the pointer and sets the new compact position directly. The saved startup position is the compact location.
 - **Taskbar:** choose **Show in taskbar — On/Off** from the right-click menu. Off hides the running-window button while leaving the widget visible. The choice persists and applies when restoring the widget from the tray. New or missing settings default to Off; an explicit saved choice is retained. The notification icon and pinned launch shortcut remain available; a pinned shortcut remains visible as a launcher.
 - **Always on top:** while enabled and the widget is visible, a local check every two seconds repairs a lost topmost flag or an ordinary window covering it. Recovery preserves position, size and keyboard focus. It pauses during dragging, menus, modal dialogs and minimization, respects deliberate hiding and Off, and ignores other topmost windows and windows on inactive virtual desktops. This check makes no Codex requests.
@@ -70,7 +77,7 @@ The percentage is the capacity still available. For example, if Codex reports 10
 The forecast assumes that this average continues. For example, 10% used after three days means 3.3% per day and about 77% left at reset. Using 50% after two days means 25% per day, with about two days of capacity remaining and five days until reset.
 
 - Forecasts are withheld during the first six hours of a cycle. Exhausted capacity is still shown immediately.
-- Both faces turn muted red when projected total usage exceeds 100.5%, or capacity is exhausted. The warning clears at 99.5% or less; this small buffer prevents flickering near the boundary.
+- The Remaining at Reset column is highlighted in muted red whenever its displayed percentage is **0% or below**, including small positive forecasts rounded to zero and exhausted capacity. The highlight clears when the displayed value returns to **1%** or more. Both faces keep their dark background; expanded hover content highlights only its forecast row using the same rule. The forecast calculations remain unchanged.
 - These estimates concern the current weekly pool. They do not assume that a banked reset will be redeemed or that paid credits will extend it.
 - While offline, the last successful weekly percentage and daily average stay visible with an **Offline** label in the title. The compact forecast becomes a dash; the last reading's time also appears in the title. The live warning colour is cleared.
 - A reset or changed reset timestamp recalculates the pace. Invalid or expired window timing does not produce a forecast.
@@ -144,7 +151,7 @@ Beta builds receive newer betas and stable releases; stable builds receive stabl
 
 ### Download a release
 
-Download from [MajorCommand's Releases page](https://github.com/majorcommand/codex-bar/releases/tag/v1.2.0-beta.1):
+Download from [MajorCommand's Releases page](https://github.com/majorcommand/codex-bar/releases/tag/v1.2.0-beta.2):
 
 - **Portable ZIP:** `CodexBar-MajorCommand-win-x64-portable.zip` includes the .NET runtime. Extract the entire ZIP into a permanent folder, then run `CodexBar.exe`. This is the simplest option if you do not already have .NET installed.
 - **Lightweight EXE:** `CodexBar.exe` requires the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/en-us/download/dotnet/10.0). The release also includes `LICENSE`, `CHANGELOG.md` and `SHA256SUMS.txt`.

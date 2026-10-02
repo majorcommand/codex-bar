@@ -6,6 +6,14 @@ All notable changes to CodexBar are documented here.
 
 No changes yet.
 
+## [1.2.0-beta.2] - 2026-10-02
+
+- Keeps both faces and reset-announcement backgrounds dark, highlighting only the Remaining at Reset column when it displays zero or below.
+- Uses black text on the red warning area, including the forecast row in expanded hover content.
+- Shows negative forecasts such as -5% instead of clamping them to zero. Rounded negative-zero values display as 0%.
+- Starts the highlight at the displayed 0% instead of waiting for the old -0.5% threshold; clears it at displayed 1% or higher. Offline and unknown forecasts do not highlight. Forecast calculations and actual weekly capacity are unchanged.
+- Updates documentation and adds an illustrative warning screenshot. Preserves the widget dimensions, normal percentage/progress colours, green reset countdowns, yellow announcements, saved settings and startup behavior.
+
 ## [1.2.0-beta.1] - 2026-10-02
 
 First public beta of **CodexBar — MajorCommand Edition**, an independent GPL-3.0-only fork of jspann21's CodexBar. Preserves the original project credit, settings and startup identity.
@@ -59,7 +67,8 @@ First public beta of **CodexBar — MajorCommand Edition**, an independent GPL-3
 - Live weekly Codex capacity and reset-time display.
 - Configurable refresh interval, transparency, always-on-top mode, Windows startup, and notification-area support.
 
-[Unreleased]: https://github.com/majorcommand/codex-bar/compare/v1.2.0-beta.1...HEAD
+[Unreleased]: https://github.com/majorcommand/codex-bar/compare/v1.2.0-beta.2...HEAD
+[1.2.0-beta.2]: https://github.com/majorcommand/codex-bar/compare/v1.2.0-beta.1...v1.2.0-beta.2
 [1.2.0-beta.1]: https://github.com/majorcommand/codex-bar/compare/v1.1.1...v1.2.0-beta.1
 [1.1.1]: https://github.com/jspann21/codex-bar/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/jspann21/codex-bar/compare/v1.0.0...v1.1.0

@@ -121,7 +121,27 @@ internal static class Checks
 
         SetSnapshot(form, 10, 4, 2);
         Check("Main face has normal background", form.BackColor == Color.FromArgb(8, 10, 9));
+        Check("On-track forecast has no red highlight", RenderPixel(form, 276, 33) == Color.FromArgb(8, 10, 9));
         Save(form, output, "on-track");
+        foreach (var projected in new[] { 0.49, 0, -0.005, -0.49 })
+        {
+            SetSnapshot(form, (100 - projected) * 2 / 7, 5, 2);
+            Check($"Displayed zero forecast is highlighted even inside the old buffer ({projected}%)",
+                (string)Invoke(form, "RemainingAtResetText")! == "0%" &&
+                RenderPixel(form, 276, 33) == Color.FromArgb(132, 38, 48) &&
+                RenderPixel(form, 172, 33) == Color.FromArgb(8, 10, 9) && !(bool)Get(form, "abovePace")!);
+        }
+        Save(form, output, "rounded-zero-warning");
+        SetSnapshot(form, 30, 5, 2);
+        Check("Negative forecast shows its shortfall with a red highlight",
+            (string)Invoke(form, "RemainingAtResetText")! == "-5%" && RenderPixel(form, 276, 33) == Color.FromArgb(132, 38, 48));
+        Save(form, output, "negative-forecast-warning");
+        SetSnapshot(form, (100 - 0.51) * 2 / 7, 5, 2);
+        Check("Highlight clears when the displayed forecast returns to one percent",
+            (string)Invoke(form, "RemainingAtResetText")! == "1%" && RenderPixel(form, 276, 33) == Color.FromArgb(8, 10, 9));
+        SetSnapshot(form, 10, 6.9, 2);
+        Check("Unknown early forecast has no zero warning", (string)Invoke(form, "RemainingAtResetText")! == "—" &&
+            RenderPixel(form, 276, 33) == Color.FromArgb(8, 10, 9));
         SetSnapshot(form, 5.1, 6.3, 2);
         Check("Overview title gives remaining cycle time", (string)Invoke(form, "OverviewTitle")! == "CODEX  ·  6.3 days until reset");
         Save(form, output, "requested-layout");
@@ -132,6 +152,8 @@ internal static class Checks
         SetSnapshot(form, 99.75, 6.75, 2);
         Save(form, output, "high-daily-average");
         SetSnapshot(form, 100, 6.9, 2);
+        Check("Early exhausted capacity still displays zero with a red highlight", (string)Invoke(form, "RemainingAtResetText")! == "0%" &&
+            RenderPixel(form, 276, 33) == Color.FromArgb(132, 38, 48));
         Save(form, output, "early-exhausted");
         SetSnapshot(form, 10, 4, 2);
         Click(form, 40, 70);
@@ -195,13 +217,18 @@ internal static class Checks
         Check("Keyboard switches face", (bool)Get(form, "showResetDetails")!);
 
         SetSnapshot(form, 50, 5, 2);
-        Check("Risk colours details red", form.BackColor == Color.FromArgb(132, 38, 48));
+        Check("Above-pace reset details keep the normal dark background", form.BackColor == Color.FromArgb(8, 10, 9) &&
+            (bool)Get(form, "abovePace")!);
         Save(form, output, "warning-details");
         Invoke(form, "ToggleFace");
         Save(form, output, "above-pace");
+        Check("Only the compact forecast column has a red warning background",
+            RenderPixel(form, 276, 33) == Color.FromArgb(132, 38, 48) &&
+            RenderPixel(form, 172, 33) == Color.FromArgb(8, 10, 9));
         Set(form, "liveConnected", false);
         Invoke(form, "UpdatePace");
-        Check("Offline clears live warning", form.BackColor == Color.FromArgb(8, 10, 9));
+        Check("Offline clears live warning", form.BackColor == Color.FromArgb(8, 10, 9) &&
+            RenderPixel(form, 276, 33) == Color.FromArgb(8, 10, 9));
         Check("Offline title identifies stale data", ((string)Invoke(form, "OverviewTitle")!).Contains("OFFLINE"));
         Save(form, output, "offline");
 
@@ -313,7 +340,8 @@ internal static class Checks
         SetSnapshot(form, 50, 5, 2);
         EnterBody(form);
         HoverTick(form, true);
-        Check("Hover retains warning colour", form.BackColor == Color.FromArgb(132, 38, 48));
+        Check("Hover highlights only the forecast row", form.BackColor == Color.FromArgb(8, 10, 9) &&
+            RenderPixel(form, 270, 181) == Color.FromArgb(132, 38, 48));
         Save(form, output, "hover-warning");
         Click(form, 40, 70);
         Check("Click on expanded face still opens reset details", (bool)Get(form, "showResetDetails")! &&
@@ -537,7 +565,7 @@ internal static class Checks
             {
                 using var client = new ReleaseUpdateClient();
                 var installed = await client.ReadAsync(EditionVersion.Current);
-                var older = await client.ReadAsync(EditionVersion.Parse("1.2.0-beta.0")!);
+                var older = await client.ReadAsync(EditionVersion.Parse("1.2.0-beta.1")!);
                 return (installed, older);
             }).GetAwaiter().GetResult();
             Check("Live GitHub releases do not offer an update to this beta", updates.installed is null);
@@ -553,7 +581,7 @@ internal static class Checks
         using var handler = new ResetAnnouncementChecks.Handler((_, _) => Task.FromResult(unavailable
             ? new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.BadGateway)
             : ResetAnnouncementChecks.JsonResponse(newer
-                ? ReleaseUpdateChecks.Releases(ReleaseUpdateChecks.Release("v1.2.0-beta.2")) : "[]")));
+                ? ReleaseUpdateChecks.Releases(ReleaseUpdateChecks.Release("v1.2.0-beta.3")) : "[]")));
         using var widget = new WidgetForm(new AppSettings { AlwaysOnTop = false },
             releaseUpdateClient: new ReleaseUpdateClient(handler));
         foreach (var name in new[] { "refreshTimer", "positionSaveTimer", "hoverTimer", "topmostTimer" })
@@ -565,7 +593,7 @@ internal static class Checks
         var download = (ToolStripMenuItem)widget.ContextMenuStrip.Items["availableUpdate"]!;
         var originalSize = widget.Size;
         ((Task)Invoke(widget, "RefreshUpdatesAsync", false)!).GetAwaiter().GetResult();
-        Check("Actual form exposes a new beta download without resizing", download.Available && download.Text!.Contains("1.2.0-beta.2") &&
+        Check("Actual form exposes a new beta download without resizing", download.Available && download.Text!.Contains("1.2.0-beta.3") &&
             Get(widget, "availableUpdate") is ReleaseUpdate && widget.Size == originalSize);
         ((Task)Invoke(widget, "RefreshUpdatesAsync", true)!).GetAwaiter().GetResult();
         Check("Repeated manual clicks are throttled", handler.Calls == 1);
@@ -679,8 +707,14 @@ internal static class Checks
         bottom.PerformClick();
         SetSnapshot(widget, 50, 5, 2);
         Save(widget, output, "announcement-warning");
-        Check("Usage warning preserves yellow announcement text", widget.BackColor == Color.FromArgb(132, 38, 48) &&
+        Check("Usage warning preserves yellow announcement text and dark background", widget.BackColor == Color.FromArgb(8, 10, 9) &&
+            RenderPixel(widget, 276, 33) == Color.FromArgb(132, 38, 48) &&
             (bool)Invoke(widget, "AnnouncementIsActive", DateTimeOffset.Now)!);
+        crown.PerformClick();
+        Save(widget, output, "announcement-crown-warning");
+        Check("Crown warning stays inside the forecast column", RenderPixel(widget, 276, 33) == Color.FromArgb(132, 38, 48) &&
+            RenderPixel(widget, 172, 33) == Color.FromArgb(8, 10, 9));
+        bottom.PerformClick();
         Set(widget, "announcementCheckedAt", DateTimeOffset.Now.AddMinutes(-11));
         Check("Old tracker data is explicitly stale", (string)Invoke(widget, "AnnouncementText", DateTimeOffset.Now)! == "Stale · reset info" &&
             !(bool)Invoke(widget, "AnnouncementIsActive", DateTimeOffset.Now)!);
@@ -746,6 +780,16 @@ internal static class Checks
         using var bitmap = new Bitmap(form.Width, form.Height);
         form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, form.Size));
         bitmap.Save(Path.Combine(path, name + ".png"), ImageFormat.Png);
+    }
+
+    private static Color RenderPixel(WidgetForm form, int x, int bodyY)
+    {
+        var preferences = (AppSettings)Get(form, "settings")!;
+        var y = bodyY + (preferences.ResetAnnouncementPlacement == AnnouncementPlacement.Crown ? 24 : 0);
+        var scale = form.DeviceDpi / 96f;
+        using var bitmap = new Bitmap(form.Width, form.Height);
+        form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, form.Size));
+        return bitmap.GetPixel((int)Math.Round(x * scale), (int)Math.Round(y * scale));
     }
 
     private static bool Near(double? value, double expected) => value.HasValue && Math.Abs(value.Value - expected) < 0.00001;
