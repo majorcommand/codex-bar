@@ -4,7 +4,16 @@ All notable changes to CodexBar are documented here.
 
 ## [Unreleased]
 
-No changes yet.
+## [1.2.0-beta.3] - 2026-10-03
+
+- Keeps the collapsed strip at the visible progress bar's screen position with matching fill width and side spacing. Restores the original widget position and preserves relative movement when dragging the strip.
+- Fixes jagged widget text after numeric tray-icon initialization by explicitly using ClearType for widget text.
+- Adds a title-dot/menu collapse mode: a live 290 × 8 progress bar that supports dragging and click/keyboard restoration of the previous page, without hover expansion. Keeps the existing hide-to-tray buttons.
+- Allows up to 80% off-screen dragging at every edge, including into the taskbar area. Preserves deliberate placement across refreshes/restarts and adds Bring fully on screen recovery; the tiny bar remains vertically reachable above the taskbar.
+- Replaces the notification icon with high-contrast weekly-remaining digits. Updates while hidden/collapsed and shows a dash for unavailable/offline readings; branding and launch shortcuts stay unchanged.
+- Renames the overview labels to Daily usage at current rate and Est. Remaining at Reset, each on two lines. Adds 14 pixels of height for label spacing and lowers the progress bar; both faces keep their 290-pixel width and reset details are unchanged.
+- Shows daily averages and reset forecasts immediately once any cycle time has elapsed, removing the six-hour wait. The exact cycle start remains undefined rather than dividing by zero.
+- Fits large percentages within their existing columns by reducing the font size; keeps all digits, signed forecasts and existing warning colours.
 
 ## [1.2.0-beta.2] - 2026-10-02
 

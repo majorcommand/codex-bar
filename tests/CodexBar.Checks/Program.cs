@@ -82,11 +82,22 @@ internal static class Checks
         Check("Partial days", Near(UsagePace.Calculate(10, Now.AddDays(5.5), Now)!.AveragePerDay, 10d / 1.5));
         Check("No usage has no exhaustion estimate", UsagePace.Calculate(0, Now.AddDays(4), Now) is
             { AveragePerDay: 0, DaysOfCapacity: null, RemainingAtReset: 100, AbovePace: false });
-        Check("Early cycle avoids prediction", UsagePace.Calculate(10, Now.AddHours(167), Now) is
-            { AveragePerDay: null, AbovePace: false });
+        var firstHour = UsagePace.Calculate(10, Now.AddHours(167), Now)!;
+        Check("First-hour usage immediately produces an average and forecast", Near(firstHour.AveragePerDay, 240) &&
+            Near(firstHour.RemainingAtReset, -1580) && Near(firstHour.DaysOfCapacity, 0.375) && firstHour.AbovePace);
+        var firstMinute = UsagePace.Calculate(1, Now.AddDays(7).AddMinutes(-1), Now)!;
+        Check("First-minute usage produces a finite signed forecast", Near(firstMinute.AveragePerDay, 1440) &&
+            Near(firstMinute.RemainingAtReset, -9980));
+        var firstTick = UsagePace.Calculate(1, Now.AddDays(7).AddTicks(-1), Now)!;
+        Check("Smallest elapsed time remains finite", double.IsFinite(firstTick.AveragePerDay!.Value) &&
+            double.IsFinite(firstTick.RemainingAtReset!.Value) && firstTick.AbovePace);
+        Check("Exact cycle start avoids division by zero", UsagePace.Calculate(10, Now.AddDays(7), Now) is
+            { AveragePerDay: null, RemainingAtReset: null, AbovePace: false });
+        Check("Zero usage immediately shows zero average and full projected capacity", UsagePace.Calculate(0, Now.AddHours(167), Now) is
+            { AveragePerDay: 0, RemainingAtReset: 100, DaysOfCapacity: null, AbovePace: false });
         Check("Exhausted even early", UsagePace.Calculate(100, Now.AddHours(167), Now) is
             { Exhausted: true, AbovePace: true, DaysOfCapacity: 0 });
-        Check("Six-hour boundary", UsagePace.Calculate(1, Now.AddHours(162), Now)!.AveragePerDay is not null);
+        Check("Six-hour boundary keeps the same calculation", Near(UsagePace.Calculate(1, Now.AddHours(162), Now)!.AveragePerDay, 4));
         Check("Exact sustainable pace", UsagePace.Calculate(100d * 2 / 7, Now.AddDays(5), Now) is
             { AbovePace: false });
         Check("Warning stays stable around boundary", !UsagePace.Calculate(100.25 * 2 / 7, Now.AddDays(5), Now)!.AbovePace &&
@@ -115,12 +126,15 @@ internal static class Checks
         Check("Taskbar button stays off by default", !form.ShowInTaskbar);
         Check("Default preferences match requested hover, topmost and taskbar choices", new AppSettings() is
             { ExpandOnHover: false, AlwaysOnTop: true, ShowInTaskbar: false });
-        Check("Overview preserves its 290 by 100 body plus announcement strip", form.ClientSize ==
-            new Size((int)Math.Round(290 * form.DeviceDpi / 96f), (int)Math.Round(124 * form.DeviceDpi / 96f)));
+        Check("Overview preserves its 290 by 114 body plus announcement strip", form.ClientSize ==
+            new Size((int)Math.Round(290 * form.DeviceDpi / 96f), (int)Math.Round(138 * form.DeviceDpi / 96f)));
         Save(form, output, "loading");
 
         SetSnapshot(form, 10, 4, 2);
         Check("Main face has normal background", form.BackColor == Color.FromArgb(8, 10, 9));
+        Check("Progress bar sits below both label lines", RenderPixel(form, 20, 100) ==
+            (Color)typeof(WidgetForm).GetMethod("RemainingColor", BindingFlags.Static | BindingFlags.NonPublic)!
+                .Invoke(null, new object[] { 90d })! && RenderPixel(form, 20, 97) == Color.FromArgb(8, 10, 9));
         Check("On-track forecast has no red highlight", RenderPixel(form, 276, 33) == Color.FromArgb(8, 10, 9));
         Save(form, output, "on-track");
         foreach (var projected in new[] { 0.49, 0, -0.005, -0.49 })
@@ -135,12 +149,24 @@ internal static class Checks
         SetSnapshot(form, 30, 5, 2);
         Check("Negative forecast shows its shortfall with a red highlight",
             (string)Invoke(form, "RemainingAtResetText")! == "-5%" && RenderPixel(form, 276, 33) == Color.FromArgb(132, 38, 48));
+        Check("Forecast warning covers both label lines and stops above the bar", RenderPixel(form, 276, 94) ==
+            Color.FromArgb(132, 38, 48) && RenderPixel(form, 276, 96) == Color.FromArgb(8, 10, 9));
         Save(form, output, "negative-forecast-warning");
         SetSnapshot(form, (100 - 0.51) * 2 / 7, 5, 2);
         Check("Highlight clears when the displayed forecast returns to one percent",
             (string)Invoke(form, "RemainingAtResetText")! == "1%" && RenderPixel(form, 276, 33) == Color.FromArgb(8, 10, 9));
         SetSnapshot(form, 10, 6.9, 2);
-        Check("Unknown early forecast has no zero warning", (string)Invoke(form, "RemainingAtResetText")! == "—" &&
+        Check("Early forecast is shown and highlights the projected shortfall", (string)Invoke(form, "RemainingAtResetText")! == "-600%" &&
+            Near(((UsagePace)Get(form, "pace")!).AveragePerDay, 100) &&
+            RenderPixel(form, 276, 33) == Color.FromArgb(132, 38, 48));
+        Save(form, output, "immediate-early-forecast");
+        SetSnapshot(form, 1, 6.9, 2);
+        Check("Early sustainable use shows an average and positive forecast", (string)Invoke(form, "RemainingAtResetText")! == "30%" &&
+            Near(((UsagePace)Get(form, "pace")!).AveragePerDay, 10) &&
+            RenderPixel(form, 276, 33) == Color.FromArgb(8, 10, 9));
+        Save(form, output, "immediate-light-usage");
+        SetSnapshot(form, 10, 7, 2);
+        Check("Exact cycle start has no forecast or zero warning", (string)Invoke(form, "RemainingAtResetText")! == "—" &&
             RenderPixel(form, 276, 33) == Color.FromArgb(8, 10, 9));
         SetSnapshot(form, 5.1, 6.3, 2);
         Check("Overview title gives remaining cycle time", (string)Invoke(form, "OverviewTitle")! == "CODEX  ·  6.3 days until reset");
@@ -152,9 +178,36 @@ internal static class Checks
         SetSnapshot(form, 99.75, 6.75, 2);
         Save(form, output, "high-daily-average");
         SetSnapshot(form, 100, 6.9, 2);
-        Check("Early exhausted capacity still displays zero with a red highlight", (string)Invoke(form, "RemainingAtResetText")! == "0%" &&
+        Check("Early exhausted capacity shows the calculated shortfall with a red highlight", (string)Invoke(form, "RemainingAtResetText")! == "-6900%" &&
             RenderPixel(form, 276, 33) == Color.FromArgb(132, 38, 48));
         Save(form, output, "early-exhausted");
+        SetSnapshot(form, 100, 7, 2);
+        Check("Exact cycle start still warns about exhausted capacity", (string)Invoke(form, "RemainingAtResetText")! == "0%" &&
+            RenderPixel(form, 276, 33) == Color.FromArgb(132, 38, 48));
+        SetSnapshot(form, 50, 7 - 1d / 1440, 2);
+        Check("Heavy first-minute forecast keeps all its digits", (string)Invoke(form, "RemainingAtResetText")! == "-503900%");
+        Save(form, output, "immediate-power-usage");
+        using (var bitmap = new Bitmap(290, 100))
+        using (var graphics = Graphics.FromImage(bitmap))
+        using (var format = new StringFormat(StringFormat.GenericTypographic) { FormatFlags = StringFormatFlags.NoWrap })
+        {
+            foreach (var (text, width, fontName) in new[] {
+                ("72000%", 77f, "compactPercentFont"), ("-503900%", 98f, "compactPercentFont"),
+                ("-6047999999999900%", 98f, "compactPercentFont"), ("72000.0%", 130f, "expandedValueFont") })
+            {
+                using var fitted = (Font)typeof(WidgetForm).GetMethod("PercentageFont", BindingFlags.Static | BindingFlags.NonPublic)!
+                    .Invoke(null, new object[] { graphics, text, (Font)Get(form, fontName)!, width, format })!;
+                Check($"Large percentage fits its existing column ({text})", graphics.MeasureString(text, fitted, int.MaxValue, format).Width <= width - 4);
+            }
+            using var ordinary = (Font)typeof(WidgetForm).GetMethod("PercentageFont", BindingFlags.Static | BindingFlags.NonPublic)!
+                .Invoke(null, new object[] { graphics, "7.2%", (Font)Get(form, "compactPercentFont")!, 77f, format })!;
+            Check("Normal percentages retain their font size", ordinary.Size == ((Font)Get(form, "compactPercentFont")!).Size);
+        }
+        Set(form, "hoverExpanded", true);
+        Invoke(form, "UpdateFaceSize");
+        Save(form, output, "immediate-power-usage-expanded");
+        Set(form, "hoverExpanded", false);
+        Invoke(form, "UpdateFaceSize");
         SetSnapshot(form, 10, 4, 2);
         Click(form, 40, 70);
         Check("Click opens details", (bool)Get(form, "showResetDetails")!);
@@ -194,7 +247,7 @@ internal static class Checks
         Click(form, 40, 70);
         Check("Click returns to overview", !(bool)Get(form, "showResetDetails")!);
         Check("Returning restores compact dimensions", form.ClientSize ==
-            new Size((int)Math.Round(290 * form.DeviceDpi / 96f), (int)Math.Round(124 * form.DeviceDpi / 96f)));
+            new Size((int)Math.Round(290 * form.DeviceDpi / 96f), (int)Math.Round(138 * form.DeviceDpi / 96f)));
         var scale = form.DeviceDpi / 96f;
         var tinyMove = new MouseEventArgs(MouseButtons.Left, 1, (int)(41 * scale), (int)(70 * scale), 0);
         Invoke(form, "OnMouseDown", new MouseEventArgs(MouseButtons.Left, 1, (int)(40 * scale), (int)(70 * scale), 0));
@@ -298,7 +351,7 @@ internal static class Checks
         Set(form, "mouseDownScreen", null!);
         HoverTick(form, false);
         Check("Leaving collapses to original size", !(bool)Get(form, "hoverExpanded")! &&
-            form.ClientSize == new Size((int)Math.Round(290 * scale), (int)Math.Round(124 * scale)));
+            form.ClientSize == new Size((int)Math.Round(290 * scale), (int)Math.Round(138 * scale)));
         Click(form, 40, 17);
         Check("Header click is reserved for dragging", !(bool)Get(form, "showResetDetails")!);
 
@@ -380,7 +433,7 @@ internal static class Checks
         var headerMove = new MouseEventArgs(MouseButtons.Left, 1, (int)(60 * scale), (int)(17 * scale), 0);
         Invoke(form, "OnMouseMove", headerMove);
         Check("Header drag shrinks immediately without flipping", !(bool)Get(form, "hoverExpanded")! &&
-            !(bool)Get(form, "showResetDetails")! && form.Height == (int)Math.Round(124 * scale));
+            !(bool)Get(form, "showResetDetails")! && form.Height == (int)Math.Round(138 * scale));
         Check("Shrinking keeps header under pointer", form.Location == new Point(
             expandedPosition.X + (int)(60 * scale) - (int)(80 * scale), expandedPosition.Y));
         var bottomMove = new MouseEventArgs(MouseButtons.Left, 1, (int)(60 * scale),
@@ -548,6 +601,7 @@ internal static class Checks
         ReleaseUpdateChecks.Run(Check);
         CheckReleaseUpdateMenu();
         CheckAnnouncementLayouts(output);
+        CheckBarAndTray(output);
         if (args.Contains("--live-reset-check"))
         {
             var live = Task.Run(async () =>
@@ -565,7 +619,7 @@ internal static class Checks
             {
                 using var client = new ReleaseUpdateClient();
                 var installed = await client.ReadAsync(EditionVersion.Current);
-                var older = await client.ReadAsync(EditionVersion.Parse("1.2.0-beta.1")!);
+                var older = await client.ReadAsync(EditionVersion.Parse("1.2.0-beta.2")!);
                 return (installed, older);
             }).GetAwaiter().GetResult();
             Check("Live GitHub releases do not offer an update to this beta", updates.installed is null);
@@ -581,7 +635,7 @@ internal static class Checks
         using var handler = new ResetAnnouncementChecks.Handler((_, _) => Task.FromResult(unavailable
             ? new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.BadGateway)
             : ResetAnnouncementChecks.JsonResponse(newer
-                ? ReleaseUpdateChecks.Releases(ReleaseUpdateChecks.Release("v1.2.0-beta.3")) : "[]")));
+                ? ReleaseUpdateChecks.Releases(ReleaseUpdateChecks.Release("v1.2.0-beta.4")) : "[]")));
         using var widget = new WidgetForm(new AppSettings { AlwaysOnTop = false },
             releaseUpdateClient: new ReleaseUpdateClient(handler));
         foreach (var name in new[] { "refreshTimer", "positionSaveTimer", "hoverTimer", "topmostTimer" })
@@ -593,7 +647,7 @@ internal static class Checks
         var download = (ToolStripMenuItem)widget.ContextMenuStrip.Items["availableUpdate"]!;
         var originalSize = widget.Size;
         ((Task)Invoke(widget, "RefreshUpdatesAsync", false)!).GetAwaiter().GetResult();
-        Check("Actual form exposes a new beta download without resizing", download.Available && download.Text!.Contains("1.2.0-beta.3") &&
+        Check("Actual form exposes a new beta download without resizing", download.Available && download.Text!.Contains("1.2.0-beta.4") &&
             Get(widget, "availableUpdate") is ReleaseUpdate && widget.Size == originalSize);
         ((Task)Invoke(widget, "RefreshUpdatesAsync", true)!).GetAwaiter().GetResult();
         Check("Repeated manual clicks are throttled", handler.Calls == 1);
@@ -632,12 +686,12 @@ internal static class Checks
         Check("Announced text uses the requested yellow", (bool)Invoke(widget, "AnnouncementIsActive", DateTimeOffset.Now)! &&
             ((SolidBrush)Get(widget, "announcementBrush")!).Color == Color.FromArgb(255, 220, 70));
         Save(widget, output, "announcement-bottom-usage");
-        Click(widget, 40, 112);
+        Click(widget, 40, 126);
         Check("Bottom announcement click does not switch pages", !(bool)Get(widget, "showResetDetails")!);
-        MovePointer(widget, 40, 112);
+        MovePointer(widget, 40, 126);
         Check("Announcement strip does not trigger hover expansion", !((System.Windows.Forms.Timer)Get(widget, "hoverTimer")!).Enabled);
         Check("Visible source credit has its own link hit area", (bool)Invoke(widget, "IsAnnouncementSource",
-            new Point((int)(240 * scale), (int)(112 * scale)))!);
+            new Point((int)(240 * scale), (int)(126 * scale)))!);
         Invoke(widget, "ToggleFace");
         Save(widget, output, "announcement-bottom-details");
         Check("Page two has its announcement without losing expiry rows", widget.Height == (int)Math.Round(222 * scale));
@@ -657,7 +711,7 @@ internal static class Checks
         widget.ShowInTaskbar = true;
         widget.ShowInTaskbar = false;
         Check("Taskbar handle recreation preserves the native crown", NativeCrown(widget, scale));
-        Check("Crown keeps the same overall dimensions", widget.ClientSize == new Size((int)Math.Round(290 * scale), (int)Math.Round(124 * scale)));
+        Check("Crown keeps the same overall dimensions", widget.ClientSize == new Size((int)Math.Round(290 * scale), (int)Math.Round(138 * scale)));
         Save(widget, output, "announcement-crown-usage");
         Click(widget, 80, 12);
         Check("Crown click does not flip the usage face", !(bool)Get(widget, "showResetDetails")!);
@@ -688,7 +742,7 @@ internal static class Checks
         Invoke(widget, "OnMouseMove", new MouseEventArgs(MouseButtons.Left, 1, (int)(60 * scale), (int)(12 * scale), 0));
         Invoke(widget, "OnMouseUp", new MouseEventArgs(MouseButtons.Left, 1, (int)(60 * scale), (int)(12 * scale), 0));
         Check("Dragging crown collapses hover without flipping", !(bool)Get(widget, "hoverExpanded")! &&
-            !(bool)Get(widget, "showResetDetails")! && widget.Height == (int)Math.Round(124 * scale));
+            !(bool)Get(widget, "showResetDetails")! && widget.Height == (int)Math.Round(138 * scale));
         var area = Screen.FromControl(widget).WorkingArea;
         widget.Location = new Point(area.Right - widget.Width, area.Bottom - widget.Height);
         var edge = widget.Location;
@@ -785,7 +839,7 @@ internal static class Checks
     private static Color RenderPixel(WidgetForm form, int x, int bodyY)
     {
         var preferences = (AppSettings)Get(form, "settings")!;
-        var y = bodyY + (preferences.ResetAnnouncementPlacement == AnnouncementPlacement.Crown ? 24 : 0);
+        var y = bodyY + (!(bool)Get(form, "barOnly")! && preferences.ResetAnnouncementPlacement == AnnouncementPlacement.Crown ? 24 : 0);
         var scale = form.DeviceDpi / 96f;
         using var bitmap = new Bitmap(form.Width, form.Height);
         form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, form.Size));
@@ -793,6 +847,180 @@ internal static class Checks
     }
 
     private static bool Near(double? value, double expected) => value.HasValue && Math.Abs(value.Value - expected) < 0.00001;
+
+    private static void CheckBarAndTray(string? output)
+    {
+        var logPath = Path.Combine(output ?? Path.GetTempPath(), "bar-controls-" + Guid.NewGuid().ToString("N") + ".log");
+        using var widget = new WidgetForm(new AppSettings { X = 100, Y = 100, AlwaysOnTop = false,
+            ExpandOnHover = true, NotifyOnUsageLimitReached = false }, new VisibilityLog(logPath));
+        foreach (var name in new[] { "refreshTimer", "positionSaveTimer", "hoverTimer", "topmostTimer" })
+            ((System.Windows.Forms.Timer)Get(widget, name)!).Stop();
+        var tray = (NotifyIcon)Get(widget, "trayIcon")!;
+        tray.Visible = false;
+        widget.CreateControl();
+        var scale = widget.DeviceDpi / 96f;
+        var screen = Screen.FromControl(widget);
+        SetSnapshot(widget, 26, 5, 2);
+        // The tray's first text draw must not leave the widget with jagged glyph edges.
+        using (var rendered = new Bitmap(widget.Width, widget.Height))
+        {
+            widget.DrawToBitmap(rendered, new Rectangle(Point.Empty, widget.Size));
+            var contentTop = ((AppSettings)Get(widget, "settings")!).ResetAnnouncementPlacement == AnnouncementPlacement.Crown ? 24 : 0;
+            var glyphColors = new HashSet<int>();
+            for (var y = (int)((contentTop + 34) * scale); y < (int)((contentTop + 62) * scale); y++)
+                for (var x = (int)(20 * scale); x < (int)(95 * scale); x++)
+                    glyphColors.Add(rendered.GetPixel(x, y).ToArgb());
+            Check("Widget text keeps smoothed edges after numeric tray initialization", glyphColors.Count > 8);
+        }
+        Check("Tray shows weekly remaining and a percentage tooltip", (string)Get(widget, "trayNumber")! == "74" && tray.Text.Contains("74%"));
+        var originalIcon = tray.Icon;
+        SetSnapshot(widget, 26.1, 5, 2);
+        Check("Unchanged rounded tray number reuses its icon", ReferenceEquals(tray.Icon, originalIcon));
+        SetSnapshot(widget, 27, 5, 2);
+        Check("Changed weekly percentage replaces the tray icon", !ReferenceEquals(tray.Icon, originalIcon) && (string)Get(widget, "trayNumber")! == "73");
+        var oldIconDisposed = false;
+        try { oldIconDisposed = originalIcon!.Handle == IntPtr.Zero; }
+        catch (ObjectDisposedException) { oldIconDisposed = true; }
+        Check("Replaced tray icon releases its native ownership", oldIconDisposed);
+        foreach (var (used, expected) in new[] { (0d, "100"), (1d, "99"), (99d, "1"), (100d, "0") })
+        {
+            SetSnapshot(widget, used, 5, 2);
+            Check($"Tray reports remaining, including {expected}%", (string)Get(widget, "trayNumber")! == expected);
+            if (output is not null)
+            {
+                using var bitmap = tray.Icon!.ToBitmap();
+                bitmap.Save(Path.Combine(output, "tray-" + expected + ".png"), ImageFormat.Png);
+            }
+        }
+        Set(widget, "liveConnected", false);
+        Invoke(widget, "UpdatePace");
+        Check("Offline tray clears the numeric reading and explains why", (string)Get(widget, "trayNumber")! == "—" && tray.Text.Contains("offline"));
+        if (output is not null)
+        {
+            using var bitmap = tray.Icon!.ToBitmap();
+            bitmap.Save(Path.Combine(output, "tray-offline.png"), ImageFormat.Png);
+        }
+        SetSnapshot(widget, 26, 5, 2);
+        Check("Tray recovers after a successful reading", (string)Get(widget, "trayNumber")! == "74");
+        var original = widget.Bounds;
+        var collapsedPosition = original.Location + new Size(0, (int)Math.Round(97 * scale));
+        var originalFill = RenderPixel(widget, 50, 101);
+        var originalTrack = RenderPixel(widget, 260, 101);
+        Click(widget, 215, 17);
+        Check("Title dot leaves an eight-pixel strip at the progress bar's screen position", (bool)Get(widget, "barOnly")! &&
+            widget.Location == collapsedPosition && widget.Size == new Size(original.Width, (int)Math.Round(8 * scale)));
+        Check("Collapse preserves progress fill, track and horizontal insets", RenderPixel(widget, 50, 4) == originalFill &&
+            RenderPixel(widget, 260, 4) == originalTrack && RenderPixel(widget, 8, 4) != originalFill);
+        Check("Collapsed bar has no crown region or announcements", widget.Region is null &&
+            !(bool)Invoke(widget, "IsAnnouncement", new Point(40, 4))!);
+        Save(widget, output, "collapsed-bar");
+        MovePointer(widget, 40, 4);
+        HoverTick(widget, true);
+        Check("Bar hover does not expand or switch pages", !(bool)Get(widget, "hoverExpanded")! &&
+            !(bool)Get(widget, "showResetDetails")! && !((System.Windows.Forms.Timer)Get(widget, "hoverTimer")!).Enabled);
+        SetSnapshot(widget, 50, 5, 2);
+        Check("Live usage refresh preserves bar geometry and updates tray", widget.Height == (int)Math.Round(8 * scale) &&
+            widget.Location == collapsedPosition && (string)Get(widget, "trayNumber")! == "50");
+        Check("Bar reflects remaining capacity in its fill", RenderPixel(widget, 50, 4) != RenderPixel(widget, 240, 4));
+        Click(widget, 40, 4);
+        Check("Click restores the original overview and position", !(bool)Get(widget, "barOnly")! && widget.Bounds == original &&
+            !(bool)Get(widget, "showResetDetails")!);
+        Click(widget, 40, 70);
+        var details = widget.Bounds;
+        Click(widget, 215, 17);
+        Check("Details collapses toward the bottom of its content", widget.Top ==
+            details.Top + (int)Math.Round((details.Height / scale - 24 - 17) * scale));
+        Click(widget, 40, 4);
+        Check("Collapsing details restores that same page and geometry", (bool)Get(widget, "showResetDetails")! && widget.Bounds == details);
+        Invoke(widget, "ToggleFace");
+        EnterBody(widget);
+        HoverTick(widget, true);
+        Check("Hover is still available before collapse", (bool)Get(widget, "hoverExpanded")!);
+        var expandedProgressTop = widget.Top + (int)Math.Round(108 * scale);
+        Click(widget, 215, 17);
+        Check("Collapse stops hover expansion while retaining the expanded bar's position", (bool)Get(widget, "barOnly")! &&
+            !(bool)Get(widget, "hoverExpanded")! && widget.Top == expandedProgressTop);
+        Invoke(widget, "OnKeyDown", new KeyEventArgs(Keys.Space));
+        Check("Keyboard restores bar without changing pages", !(bool)Get(widget, "barOnly")! && !(bool)Get(widget, "showResetDetails")!);
+        var restoredPosition = widget.Location;
+        Invoke(widget, "SetBarOnly", true);
+        var barPosition = widget.Location;
+        var delta = new Size((int)Math.Round(30 * scale), (int)Math.Round(20 * scale));
+        Invoke(widget, "OnMouseDown", new MouseEventArgs(MouseButtons.Left, 1, (int)(40 * scale), (int)(4 * scale), 0));
+        Invoke(widget, "OnMouseMove", new MouseEventArgs(MouseButtons.Left, 1, (int)(70 * scale), (int)(24 * scale), 0));
+        Invoke(widget, "OnMouseUp", new MouseEventArgs(MouseButtons.Left, 1, (int)(70 * scale), (int)(4 * scale), 0));
+        Check("Dragging bar moves it without restoring", (bool)Get(widget, "barOnly")! && widget.Location == barPosition + delta);
+        Click(widget, 40, 4);
+        Check("Restored widget follows the bar's drag", widget.Location == restoredPosition + delta);
+        var prefs = (AppSettings)Get(widget, "settings")!;
+        prefs.ResetAnnouncementPlacement = AnnouncementPlacement.Crown;
+        Invoke(widget, "UpdateFaceSize");
+        var crownBounds = widget.Bounds;
+        Click(widget, 215, 41);
+        Check("Crown title dot retains the progress bar position including crown height", (bool)Get(widget, "barOnly")! &&
+            widget.Region is null && widget.Top == crownBounds.Top + (int)Math.Round(121 * scale));
+        Click(widget, 40, 4);
+        Check("Restoring crown restores its shape and saved geometry", widget.Region is not null && widget.Bounds == crownBounds);
+        Invoke(widget, "SetBarOnly", true);
+        var unchangedBar = widget.Bounds;
+        Invoke(widget, "ChangeAnnouncementPlacement", AnnouncementPlacement.Bottom);
+        Check("Changing announcement placement leaves the tiny bar in place", widget.Bounds == unchangedBar);
+        Click(widget, 40, 4);
+        Check("Restoring after a bar layout change keeps the title position", widget.Top == crownBounds.Top + (int)Math.Round(24 * scale) && widget.Region is null);
+        var offScreen = new Point(screen.Bounds.Left - (int)(widget.Width * 0.7), screen.Bounds.Top - (int)(widget.Height * 0.7));
+        var dragStart = widget.Location;
+        Invoke(widget, "OnMouseDown", new MouseEventArgs(MouseButtons.Left, 1, (int)(80 * scale), (int)(17 * scale), 0));
+        Invoke(widget, "OnMouseMove", new MouseEventArgs(MouseButtons.Left, 1,
+            (int)(80 * scale) + offScreen.X - dragStart.X, (int)(17 * scale) + offScreen.Y - dragStart.Y, 0));
+        Invoke(widget, "OnMouseUp", new MouseEventArgs(MouseButtons.Left, 1, (int)(80 * scale), (int)(17 * scale), 0));
+        Check("Actual title drag allows a partially off-screen position", widget.Location == offScreen);
+        SetSnapshot(widget, 20, 5, 2);
+        Check("Refresh preserves deliberately off-screen placement", widget.Location == offScreen);
+        for (var i = 0; i < 3; i++) { Invoke(widget, "ToggleFace"); Invoke(widget, "ToggleFace"); }
+        Check("Off-screen page switches retain their anchor", widget.Location == offScreen);
+        Invoke(widget, "SetBarOnly", true);
+        Check("Off-screen collapse leaves the bar vertically reachable", screen.WorkingArea.Top <= widget.Top && widget.Bottom <= screen.WorkingArea.Bottom);
+        Click(widget, 40, 4);
+        Check("Restoring from a constrained bar preserves the off-screen position", widget.Location == offScreen);
+        var storedPosition = JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(
+            new AppSettings { X = offScreen.X, Y = offScreen.Y, AlwaysOnTop = false }))!;
+        using (var reopened = new WidgetForm(storedPosition))
+        {
+            foreach (var name in new[] { "refreshTimer", "positionSaveTimer", "hoverTimer", "topmostTimer" })
+                ((System.Windows.Forms.Timer)Get(reopened, name)!).Stop();
+            ((NotifyIcon)Get(reopened, "trayIcon")!).Visible = false;
+            Check("Reopening with saved off-screen coordinates preserves placement", reopened.Location == offScreen && !(bool)Get(reopened, "barOnly")!);
+        }
+        var recoveryArea = Screen.FromControl(widget).WorkingArea;
+        Invoke(widget, "BringFullyOnScreen");
+        Check("Recovery brings the full widget inside the usable screen", recoveryArea.Contains(widget.Bounds) && !(bool)Get(widget, "barOnly")!);
+        Check("Recovery and collapse are available in the tray menu", widget.ContextMenuStrip!.Items.OfType<ToolStripMenuItem>().Any(i => i.Text == "Bring fully on screen") &&
+            widget.ContextMenuStrip.Items.OfType<ToolStripMenuItem>().Any(i => i.Text == "Collapse to progress bar"));
+        var fakeScreen = new Rectangle(0, 0, 1920, 1080);
+        var fakeWork = new Rectangle(0, 0, 1920, 1040);
+        var size = new Size(290, 138);
+        Point Partial(Point point, Size dimensions, Rectangle bounds, Rectangle work, bool bar) =>
+            (Point)typeof(WidgetForm).GetMethod("PartiallyVisibleLocation", BindingFlags.Static | BindingFlags.NonPublic)!
+                .Invoke(null, new object[] { point, dimensions, bounds, work, bar })!;
+        Check("Left and top retain at least twenty percent", Partial(new Point(-9999, -9999), size, fakeScreen, fakeWork, false) == new Point(-232, -110));
+        Check("Right and bottom retain at least twenty percent", Partial(new Point(9999, 9999), size, fakeScreen, fakeWork, false) == new Point(1862, 1052));
+        Check("Taskbar area no longer stops ordinary dragging", Partial(new Point(500, 1050), size, fakeScreen, fakeWork, false) == new Point(500, 1050));
+        Check("Negative monitor coordinates use that monitor's edges", Partial(new Point(-9999, -9999), size,
+            new Rectangle(-1920, -1080, 1920, 1080), new Rectangle(-1920, -1080, 1920, 1040), false) == new Point(-2152, -1190));
+        Check("Tiny bar stays vertically above the taskbar", Partial(new Point(9999, 9999), new Size(290, 8), fakeScreen, fakeWork, true) == new Point(1862, 1032));
+        SetSnapshot(widget, 26, 5, 2);
+        Save(widget, output, "new-title-controls");
+        prefs.ExpandOnHover = false;
+        Check("Isolated forms do not queue preference writes after moves or recovery",
+            !((System.Windows.Forms.Timer)Get(widget, "positionSaveTimer")!).Enabled);
+        foreach (var x in new[] { 245, 275 })
+        {
+            Click(widget, x, 17);
+            var reason = x == 245 ? "minimize-button" : "close-button";
+            Check($"Existing title hide control {x} still hides instead of collapsing", !widget.Visible && !(bool)Get(widget, "barOnly")! &&
+                ReadVisibilityLog(logPath).Any(entry => entry.GetProperty("eventName").GetString() == "hide-request" && entry.GetProperty("details").GetString()!.StartsWith(reason + ";")));
+        }
+    }
     private static JsonElement[] ReadVisibilityLog(string path) => File.ReadLines(path).Select(line =>
     {
         using var document = JsonDocument.Parse(line);

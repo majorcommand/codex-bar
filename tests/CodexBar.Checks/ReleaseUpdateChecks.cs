@@ -19,7 +19,7 @@ internal static class ReleaseUpdateChecks
 
     internal static void Run(Action<string, bool> check)
     {
-        check("Edition metadata identifies the beta", EditionVersion.Current == Beta);
+        check("Edition metadata identifies the beta", EditionVersion.Current == EditionVersion.Parse("1.2.0-beta.3"));
         foreach (var invalid in new[] { "", "v1", "1.2", "1.2.3-rc.1", "01.2.3", "1.2.3-beta.01", "1.2.3+source", "999999999999.2.3", "1.2.3\n", "../evil" })
             check("Reject invalid edition version " + JsonSerializer.Serialize(invalid), EditionVersion.Parse(invalid) is null);
         check("Version ordering uses numeric components", EditionVersion.Parse("1.10.0")!.CompareTo(EditionVersion.Parse("1.9.9")) > 0 &&

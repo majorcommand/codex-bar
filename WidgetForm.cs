@@ -10,7 +10,8 @@ namespace CodexBar;
 internal sealed class WidgetForm : Form
 {
     private const int WidgetWidth = 290;
-    private const int WidgetHeight = 100;
+    private const int WidgetHeight = 114;
+    private const int BarHeight = 8;
     private const int AnnouncementHeight = 24;
     private const int TitleHeight = 30;
     private const int ExpandedUsageHeight = 236;
@@ -56,6 +57,7 @@ internal sealed class WidgetForm : Form
     private float regionScale;
     private readonly Icon appIcon;
     private readonly NotifyIcon trayIcon;
+    private string trayNumber = "—";
     private readonly System.Windows.Forms.Timer refreshTimer;
     private readonly System.Windows.Forms.Timer positionSaveTimer;
     private readonly System.Windows.Forms.Timer hoverTimer;
@@ -101,6 +103,8 @@ internal sealed class WidgetForm : Form
     private bool announcementPress;
     private int firstVisibleExpiration;
     private bool hoverExpanded;
+    private bool barOnly;
+    private Point? barRestoreLocation;
     private bool expandOnNextHoverTick;
     private bool pointerInHoverBody;
     private bool suppressHoverUntilReentry;
@@ -110,9 +114,11 @@ internal sealed class WidgetForm : Form
     // Drawing uses logical pixels so fonts and hit areas scale together with DPI.
     private float UiScale => DeviceDpi / 96f;
     private int LogicalWidth => (int)Math.Round(ClientSize.Width / UiScale);
-    private bool CrownAnnouncements => settings.ResetAnnouncementPlacement == AnnouncementPlacement.Crown;
+    private bool CrownAnnouncements => !barOnly && settings.ResetAnnouncementPlacement == AnnouncementPlacement.Crown;
     private int ContentTop => CrownAnnouncements ? AnnouncementHeight : 0;
-    private int LogicalHeight => (int)Math.Round(ClientSize.Height / UiScale) - AnnouncementHeight;
+    private Rectangle ProgressTrack => new(16, barOnly ? 2 : hoverExpanded ? 110 : WidgetHeight - 15,
+        WidgetWidth - 32, !barOnly && hoverExpanded ? 6 : 4);
+    private int LogicalHeight => (int)Math.Round(ClientSize.Height / UiScale) - (barOnly ? 0 : AnnouncementHeight);
     private int VisibleExpirationRows => Math.Max(1, (LogicalHeight - ResetRowsTop - DetailsFooterSpace) / ResetRowHeight);
     private PointF LogicalPoint(Point point) => new(point.X / UiScale, point.Y / UiScale - ContentTop);
     private RectangleF AnnouncementBounds => CrownAnnouncements
@@ -206,7 +212,7 @@ internal sealed class WidgetForm : Form
 
         trayIcon = new NotifyIcon
         {
-            Icon = (Icon)appIcon.Clone(),
+            Icon = CreateUsageTrayIcon(trayNumber),
             Text = "CodexBar — loading weekly usage",
             Visible = true,
             ContextMenuStrip = BuildTrayMenu()
@@ -339,7 +345,7 @@ internal sealed class WidgetForm : Form
         var handle = IsHandleCreated ? Handle : IntPtr.Zero;
         var owner = handle != IntPtr.Zero ? GetWindow(handle, 4) : IntPtr.Zero;
         return $"managedVisible={Visible};windowState={WindowState};enabled={Enabled};exiting={exiting};" +
-            $"alwaysOnTop={settings?.AlwaysOnTop};showInTaskbar={ShowInTaskbar};" +
+            $"alwaysOnTop={settings?.AlwaysOnTop};showInTaskbar={ShowInTaskbar};barOnly={barOnly};" +
             $"bounds={Left},{Top},{Width},{Height};widget=[{NativeVisibilityState(handle)}];owner=[{NativeVisibilityState(owner)}]";
     }
 
@@ -377,6 +383,13 @@ internal sealed class WidgetForm : Form
         var g = e.Graphics;
         g.ScaleTransform(UiScale, UiScale);
         g.SmoothingMode = SmoothingMode.AntiAlias;
+        // A prior tray-icon text draw can make GDI+ SystemDefault render jagged text.
+        g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+        if (barOnly)
+        {
+            DrawBarOnly(g);
+            return;
+        }
         DrawAnnouncement(g);
         g.TranslateTransform(0, ContentTop);
 
@@ -390,13 +403,8 @@ internal sealed class WidgetForm : Form
             Trimming = StringTrimming.EllipsisCharacter };
         var title = showResetDetails ? "CODEX  ·  RESET DETAILS" : OverviewTitle();
         g.DrawString(title, titleFont, dimBrush,
-            new RectangleF(20, titleY, LogicalWidth - (showResetDetails ? 82 : 108), 18), titleFormat);
+            new RectangleF(20, titleY, LogicalWidth - 114, 18), titleFormat);
         DrawWindowControls(g);
-        if (!showResetDetails)
-        {
-            g.FillEllipse(textBrush, LogicalWidth - 81, 18, 4, 4);
-            g.FillEllipse(dimBrush, LogicalWidth - 71, 18, 4, 4);
-        }
 
         if (snapshot is null)
         {
@@ -438,13 +446,13 @@ internal sealed class WidgetForm : Form
         UpdateHoverTarget(false);
     }
 
-    private bool IsHoverBody(Point point) => IsInsideWidget(point) &&
+    private bool IsHoverBody(Point point) => !barOnly && IsInsideWidget(point) &&
         LogicalPoint(point).Y > TitleHeight && LogicalPoint(point).Y < LogicalHeight;
 
     private bool IsInsideWidget(Point point) => ClientRectangle.Contains(point) &&
         (Region?.IsVisible(point) ?? true);
 
-    private bool IsAnnouncement(Point point) => IsInsideWidget(point) &&
+    private bool IsAnnouncement(Point point) => !barOnly && IsInsideWidget(point) &&
         AnnouncementBounds.Contains(point.X / UiScale, point.Y / UiScale);
 
     private bool IsAnnouncementSource(Point point) => IsAnnouncement(point) &&
@@ -470,7 +478,7 @@ internal sealed class WidgetForm : Form
     private void QueueHover(bool expand)
     {
         hoverTimer.Stop();
-        if (!settings.ExpandOnHover || showResetDetails) return;
+        if (!settings.ExpandOnHover || showResetDetails || barOnly) return;
         if (expand && (!pointerInHoverBody || suppressHoverUntilReentry)) return;
         expandOnNextHoverTick = expand;
         hoverTimer.Interval = expand ? 350 : 450;
@@ -479,7 +487,7 @@ internal sealed class WidgetForm : Form
 
     private void ProcessHoverTick(bool pointerInBody, bool menuVisible)
     {
-        if (!settings.ExpandOnHover || showResetDetails)
+        if (!settings.ExpandOnHover || showResetDetails || barOnly)
         {
             CancelHover();
             return;
@@ -517,9 +525,9 @@ internal sealed class WidgetForm : Form
         hoverTimer.Stop();
         var point = LogicalPoint(e.Location);
         announcementPress = IsAnnouncement(e.Location);
-        controlPress = point.Y >= 0 && point.Y <= TitleHeight && point.X >= LogicalWidth - 60;
-        titlePress = CrownAnnouncements && point.Y < 0 ||
-            point.Y >= 0 && point.Y <= TitleHeight && !controlPress;
+        controlPress = WindowControlAt(point) >= 0;
+        titlePress = !barOnly && (CrownAnnouncements && point.Y < 0 ||
+            point.Y >= 0 && point.Y <= TitleHeight && !controlPress);
         dragging = false;
         mouseDownScreen = PointToScreen(e.Location);
         dragOrigin = Location;
@@ -534,9 +542,9 @@ internal sealed class WidgetForm : Form
             UpdateHoverTarget(IsHoverBody(e.Location));
             SetAnnouncementTip(IsAnnouncement(e.Location));
             var point = LogicalPoint(e.Location);
-            Cursor = IsAnnouncementSource(e.Location) ? Cursors.Hand
+            Cursor = barOnly ? Cursors.SizeAll : IsAnnouncementSource(e.Location) ? Cursors.Hand
                 : CrownAnnouncements && point.Y < 0 ||
-                    point.Y >= 0 && point.Y <= TitleHeight && point.X < LogicalWidth - 60
+                    point.Y >= 0 && point.Y <= TitleHeight && point.X < LogicalWidth - 90
                     ? Cursors.SizeAll : Cursors.Default;
             return;
         }
@@ -565,6 +573,9 @@ internal sealed class WidgetForm : Form
             if (compactAnchor is { } anchor)
                 compactAnchor = new Point(anchor.X + Location.X - previous.X,
                     anchor.Y + Location.Y - previous.Y);
+            if (barRestoreLocation is { } restore)
+                barRestoreLocation = new Point(restore.X + Location.X - previous.X,
+                    restore.Y + Location.Y - previous.Y);
         }
     }
 
@@ -594,9 +605,17 @@ internal sealed class WidgetForm : Form
         }
         if (wasControl)
         {
-            if (point.Y >= 0 && point.Y <= TitleHeight && point.X >= LogicalWidth - 60 &&
-                (start.X >= LogicalWidth - 30) == (point.X >= LogicalWidth - 30))
-                HideToTray(point.X >= LogicalWidth - 30 ? "close-button" : "minimize-button");
+            var control = WindowControlAt(point);
+            if (control >= 0 && control == WindowControlAt(start))
+            {
+                if (control == 0) SetBarOnly(true);
+                else HideToTray(control == 2 ? "close-button" : "minimize-button");
+            }
+            return;
+        }
+        if (barOnly)
+        {
+            SetBarOnly(false);
             return;
         }
         if (wasAnnouncement)
@@ -627,7 +646,8 @@ internal sealed class WidgetForm : Form
         base.OnKeyDown(e);
         if (e.KeyCode is Keys.Space or Keys.Enter)
         {
-            ToggleFace();
+            if (barOnly) SetBarOnly(false);
+            else ToggleFace();
             e.Handled = e.SuppressKeyPress = true;
         }
     }
@@ -635,7 +655,7 @@ internal sealed class WidgetForm : Form
     protected override void OnMouseWheel(MouseEventArgs e)
     {
         base.OnMouseWheel(e);
-        if (!showResetDetails || snapshot is null) return;
+        if (barOnly || !showResetDetails || snapshot is null) return;
         firstVisibleExpiration = Math.Clamp(firstVisibleExpiration - Math.Sign(e.Delta),
             0, Math.Max(0, snapshot.ResetExpirations.Count - VisibleExpirationRows));
         Invalidate();
@@ -643,6 +663,7 @@ internal sealed class WidgetForm : Form
 
     private void ToggleFace()
     {
+        if (barOnly) SetBarOnly(false);
         CancelHover();
         if (!showResetDetails) compactAnchor = Location;
         showResetDetails = !showResetDetails;
@@ -657,23 +678,65 @@ internal sealed class WidgetForm : Form
 
     private void UpdateFaceSize()
     {
+        var screen = Screen.FromControl(this);
+        var wasFullyVisible = screen.WorkingArea.Contains(Bounds);
         var wantedHeight = showResetDetails
             ? Math.Max(DetailsMinimumHeight, ResetRowsTop + DetailsFooterSpace +
                 (snapshot?.ResetExpirations.Count ?? 0) * ResetRowHeight)
             : hoverExpanded ? ExpandedUsageHeight : WidgetHeight;
-        var screen = Screen.FromControl(this).WorkingArea;
         ClientSize = new Size((int)Math.Round(WidgetWidth * UiScale),
-            Math.Min((int)Math.Round((wantedHeight + AnnouncementHeight) * UiScale), screen.Height));
+            barOnly ? (int)Math.Round(BarHeight * UiScale)
+                : Math.Min((int)Math.Round((wantedHeight + AnnouncementHeight) * UiScale), screen.WorkingArea.Height));
         UpdateWidgetRegion();
         // Keep a deliberately dragged larger face in place during refreshes.
         // Only shrinking back to compact restores its separately retained origin.
-        Location = KeepVisible(showResetDetails || hoverExpanded ? Location : compactAnchor ?? Location);
+        var desired = barOnly || showResetDetails || hoverExpanded ? Location : compactAnchor ?? Location;
+        Location = !barOnly && wasFullyVisible ? FullyVisibleLocation(desired, Size, screen.WorkingArea) : KeepVisible(desired);
+    }
+
+    private void SetBarOnly(bool collapsed)
+    {
+        if (barOnly == collapsed) return;
+        if (collapsed)
+        {
+            // Keep the strip's fill at the visible progress bar's screen position.
+            // The details face has no progress bar, so collapse toward its bottom edge.
+            var progressY = showResetDetails ? LogicalHeight - 15 : ProgressTrack.Top;
+            var stripLocation = new Point(Left, Top + (int)Math.Round((ContentTop + progressY - 2) * UiScale));
+            CancelHover();
+            barRestoreLocation = Location;
+            barOnly = true;
+            UpdateFaceSize();
+            Location = KeepVisible(stripLocation);
+        }
+        else
+        {
+            var restore = barRestoreLocation ?? Location;
+            barOnly = false;
+            UpdateFaceSize();
+            Location = KeepVisible(restore);
+            barRestoreLocation = null;
+        }
+        pointerInHoverBody = false;
+        suppressHoverUntilReentry = true;
+        SetAnnouncementTip(false);
+        RecordVisibility(collapsed ? "bar-collapse" : "bar-restore");
+        Invalidate();
+    }
+
+    private void BringFullyOnScreen()
+    {
+        SetBarOnly(false);
+        CancelHover();
+        Location = FullyVisibleLocation(Location, Size, Screen.FromControl(this).WorkingArea);
+        if (compactAnchor is not null) compactAnchor = Location;
+        RecordVisibility("bring-fully-on-screen");
     }
 
     private GraphicsPath WidgetOutline()
     {
         var outline = new GraphicsPath();
-        var height = LogicalHeight + AnnouncementHeight;
+        var height = LogicalHeight + (barOnly ? 0 : AnnouncementHeight);
         if (CrownAnnouncements)
             outline.AddPolygon(new PointF[]
             {
@@ -704,12 +767,17 @@ internal sealed class WidgetForm : Form
     {
         if (settings.ResetAnnouncementPlacement == placement) return;
         CancelHover();
-        var oldTop = ContentTop;
+        var area = Screen.FromControl(this).WorkingArea;
+        var wasFullyVisible = area.Contains(Bounds);
+        var oldTop = settings.ResetAnnouncementPlacement == AnnouncementPlacement.Crown ? AnnouncementHeight : 0;
         settings.ResetAnnouncementPlacement = placement;
-        var delta = (int)Math.Round((oldTop - ContentTop) * UiScale);
-        Location = new Point(Left, Top + delta);
+        var newTop = placement == AnnouncementPlacement.Crown ? AnnouncementHeight : 0;
+        var delta = (int)Math.Round((oldTop - newTop) * UiScale);
+        if (!barOnly) Location = new Point(Left, Top + delta);
+        else if (barRestoreLocation is { } restore) barRestoreLocation = new Point(restore.X, restore.Y + delta);
         if (compactAnchor is { } anchor) compactAnchor = new Point(anchor.X, anchor.Y + delta);
         UpdateFaceSize();
+        if (!barOnly && wasFullyVisible) Location = FullyVisibleLocation(Location, Size, area);
         pointerInHoverBody = false;
         Invalidate();
         if (!isolatedPreferences) settings.Save();
@@ -753,7 +821,8 @@ internal sealed class WidgetForm : Form
 
     private void SetAnnouncementTip(bool show)
     {
-        var text = show ? "Data from Codex Resets · " + ResetAnnouncementClient.SourceUrl + "\n" +
+        var text = barOnly ? "Click to restore · drag to move" + (!liveConnected ? " · usage offline" : "")
+            : show ? "Data from Codex Resets · " + ResetAnnouncementClient.SourceUrl + "\n" +
             (announcements?.Details(DateTimeOffset.Now) ?? "Checking the independent reset tracker.") +
             (AnnouncementStale(DateTimeOffset.Now) ? "\nStatus unavailable or stale; check the source." : "") +
             (announcementCheckedAt is { } checkedAt ? $"\nLast checked {checkedAt.ToLocalTime():h:mm tt}." : "") +
@@ -810,6 +879,8 @@ internal sealed class WidgetForm : Form
 
     private void UpdatePace()
     {
+        UpdateUsageTrayIcon();
+        if (barOnly) SetAnnouncementTip(false);
         if (snapshot is null) return;
         if (paceReset != snapshot.ResetsAt) abovePace = false;
         paceReset = snapshot.ResetsAt;
@@ -835,9 +906,6 @@ internal sealed class WidgetForm : Form
             readError = null;
             UpdatePace();
             UpdateFaceSize();
-            var remainingPercent = 100 - current.UsedPercent;
-            var tooltip = $"Codex weekly left: {remainingPercent:0}% · reset {current.ResetsAt.ToLocalTime():ddd h:mm tt}";
-            trayIcon.Text = tooltip[..Math.Min(63, tooltip.Length)];
             await NotifyIfUsageLimitReachedAsync(current);
             Invalidate();
         }
@@ -856,10 +924,32 @@ internal sealed class WidgetForm : Form
         }
     }
 
+    private void UpdateUsageTrayIcon()
+    {
+        if (exiting || Disposing || IsDisposed) return;
+        var current = snapshot;
+        var available = liveConnected && current is not null && double.IsFinite(current.UsedPercent);
+        var number = available ? $"{Math.Clamp(100 - current!.UsedPercent, 0, 100):0}" : "—";
+        if (number != trayNumber)
+        {
+            var next = CreateUsageTrayIcon(number);
+            var previous = trayIcon.Icon;
+            trayIcon.Icon = next;
+            trayNumber = number;
+            previous?.Dispose();
+        }
+        var tooltip = available
+            ? $"Codex weekly left: {number}% · reset {current!.ResetsAt.ToLocalTime():ddd h:mm tt}"
+            : current is null ? "Codex weekly left: unavailable" : "Codex weekly left: offline";
+        trayIcon.Text = tooltip[..Math.Min(63, tooltip.Length)];
+    }
+
     private ContextMenuStrip BuildTrayMenu()
     {
         var menu = new ContextMenuStrip { ShowImageMargin = false };
         menu.Items.Add("Show widget", null, (_, _) => ShowWidget());
+        menu.Items.Add("Collapse to progress bar", null, (_, _) => SetBarOnly(true));
+        menu.Items.Add("Bring fully on screen", null, (_, _) => { BringFullyOnScreen(); ShowWidget(); });
         menu.Items.Add("Switch face", null, (_, _) => ToggleFace());
         menu.Items.Add("Refresh now", null, async (_, _) =>
             await Task.WhenAll(RefreshUsageAsync(), RefreshAnnouncementsAsync()));
@@ -1272,9 +1362,21 @@ internal sealed class WidgetForm : Form
 
     private void DrawWindowControls(Graphics g)
     {
+        g.FillEllipse(dimBrush, LogicalWidth - 77, 15, 4, 4);
         g.DrawLine(controlPen, LogicalWidth - 48, 17, LogicalWidth - 40, 17);
         g.DrawLine(controlPen, LogicalWidth - 20, 13, LogicalWidth - 12, 21);
         g.DrawLine(controlPen, LogicalWidth - 12, 13, LogicalWidth - 20, 21);
+    }
+
+    private int WindowControlAt(PointF point) => !barOnly && point.Y >= 0 && point.Y <= TitleHeight &&
+        point.X >= LogicalWidth - 90 && point.X < LogicalWidth
+        ? (int)((point.X - (LogicalWidth - 90)) / 30) : -1;
+
+    private void DrawBarOnly(Graphics g)
+    {
+        g.DrawRectangle(borderPen, 0.5f, 0.5f, WidgetWidth - 1, BarHeight - 1);
+        var remaining = snapshot is null ? 0 : Math.Clamp(100 - snapshot.UsedPercent, 0, 100);
+        DrawProgress(g, remaining, liveConnected ? RemainingColor(remaining) : dimBrush.Color);
     }
 
     private void DrawUsageOverview(Graphics g, double remaining)
@@ -1293,13 +1395,36 @@ internal sealed class WidgetForm : Form
             FormatFlags = StringFormatFlags.NoWrap
         };
         var left = (LogicalWidth - 269) / 2f;
-        if (warning) g.FillRectangle(forecastWarningBrush, left + 171, 32, 98, 49);
+        if (warning) g.FillRectangle(forecastWarningBrush, left + 171, 32, 98, 63);
         g.DrawString($"{remaining:0}%", percentFont, usageBrush, new RectangleF(left, 31, 94, 44), centered);
-        g.DrawString(average, compactPercentFont, usageBrush, new RectangleF(left + 93, 34, 77, 34), centered);
-        g.DrawString(forecast, compactPercentFont, warning ? forecastWarningTextBrush : usageBrush, new RectangleF(left + 171, 34, 98, 34), centered);
+        DrawPercentage(g, average, compactPercentFont, usageBrush, new RectangleF(left + 93, 34, 77, 34), centered);
+        DrawPercentage(g, forecast, compactPercentFont, warning ? forecastWarningTextBrush : usageBrush, new RectangleF(left + 171, 34, 98, 34), centered);
         g.DrawString("Weekly Left", compactLabelFont, dimBrush, new RectangleF(left, 66, 94, 15), centered);
-        g.DrawString("Day Average", compactLabelFont, dimBrush, new RectangleF(left + 93, 66, 77, 15), centered);
-        g.DrawString("Remaining at Reset", compactLabelFont, warning ? forecastWarningTextBrush : dimBrush, new RectangleF(left + 171, 66, 98, 15), centered);
+        g.DrawString("Daily usage\nat current rate", compactLabelFont, dimBrush, new RectangleF(left + 93, 66, 77, 29), centered);
+        g.DrawString("Est. Remaining\nat Reset", compactLabelFont, warning ? forecastWarningTextBrush : dimBrush, new RectangleF(left + 171, 66, 98, 29), centered);
+    }
+
+    private static Font PercentageFont(Graphics g, string text, Font normalFont, float width, StringFormat format)
+    {
+        var available = width - 4;
+        var measured = g.MeasureString(text, normalFont, int.MaxValue, format).Width;
+        var size = normalFont.Size * Math.Min(1, available / measured);
+        var fitted = new Font(normalFont.FontFamily, size, normalFont.Style, normalFont.Unit);
+        // GDI font metrics do not scale exactly at small sizes.
+        while (g.MeasureString(text, fitted, int.MaxValue, format).Width > available)
+        {
+            size *= 0.95f;
+            fitted.Dispose();
+            fitted = new Font(normalFont.FontFamily, size, normalFont.Style, normalFont.Unit);
+        }
+        return fitted;
+    }
+
+    private static void DrawPercentage(Graphics g, string text, Font normalFont, Brush brush, RectangleF bounds, StringFormat format)
+    {
+        using var fitted = PercentageFont(g, text, normalFont, bounds.Width, format);
+        bounds.Y += (normalFont.GetHeight(g) - fitted.GetHeight(g)) / 2;
+        g.DrawString(text, fitted, brush, bounds, format);
     }
 
     private string RemainingAtResetText()
@@ -1346,17 +1471,18 @@ internal sealed class WidgetForm : Form
         g.DrawString("of week left", bodyFont, dimBrush, 174, 73);
         DrawProgress(g, remaining, color);
 
-        g.DrawString("Average / day", bodyFont, dimBrush, 20, 127);
+        g.DrawString("Daily usage rate", bodyFont, dimBrush, 20, 127);
         g.DrawString("Until reset", bodyFont, dimBrush, 166, 127);
         var average = pace?.AveragePerDay is { } daily ? $"{daily:0.0}%" : "—";
-        g.DrawString(average, expandedValueFont, usageBrush, 20, 148);
+        using var averageFormat = new StringFormat(StringFormat.GenericTypographic) { FormatFlags = StringFormatFlags.NoWrap };
+        DrawPercentage(g, average, expandedValueFont, usageBrush, new RectangleF(20, 148, 130, 28), averageFormat);
         g.DrawString(pace is null ? "—" : FormatDays(pace.DaysUntilReset), expandedValueFont, textBrush, 166, 148);
 
         string forecast;
         if (!liveConnected) forecast = $"Offline · read {snapshot!.CapturedAt.ToLocalTime():h:mm tt}";
         else if (pace is null) forecast = "Waiting for a current reset time";
         else if (pace.Exhausted) forecast = "Weekly capacity exhausted";
-        else if (pace.AveragePerDay is null) forecast = "Estimating · first 6 hours of the cycle";
+        else if (pace.AveragePerDay is null) forecast = "Waiting for elapsed cycle time";
         else if (pace.AbovePace) forecast = $"Runs out in ~{FormatDays(pace.DaysOfCapacity!.Value)} at this pace";
         else if (pace.RemainingAtReset < 0.5) forecast = "Near weekly limit · little headroom";
         else forecast = $"On track · ~{pace.RemainingAtReset:0}% left at reset";
@@ -1435,8 +1561,7 @@ internal sealed class WidgetForm : Form
 
     private void DrawProgress(Graphics g, double percent, Color color)
     {
-        var track = hoverExpanded ? new Rectangle(16, 110, WidgetWidth - 32, 6)
-            : new Rectangle(16, WidgetHeight - 15, WidgetWidth - 32, 4);
+        var track = ProgressTrack;
         g.FillRectangle(trackBrush, track);
         usageBrush.Color = color;
         if (percent > 0) g.FillRectangle(usageBrush, track.X, track.Y,
@@ -1586,6 +1711,7 @@ internal sealed class WidgetForm : Form
 
     private void ShowWidget()
     {
+        SetBarOnly(false);
         RecordVisibility("show-request", "tray-or-menu");
         ApplyTaskbarVisibility(true);
         Show();
@@ -1695,7 +1821,7 @@ internal sealed class WidgetForm : Form
 
     private void QueuePositionSave()
     {
-        if (WindowState != FormWindowState.Normal) return;
+        if (isolatedPreferences || WindowState != FormWindowState.Normal) return;
         positionSaveTimer.Stop();
         positionSaveTimer.Start();
     }
@@ -1709,8 +1835,8 @@ internal sealed class WidgetForm : Form
 
     private void SavePositionNow()
     {
-        if (WindowState != FormWindowState.Normal) return;
-        var savedLocation = compactAnchor ?? Location;
+        if (isolatedPreferences || WindowState != FormWindowState.Normal) return;
+        var savedLocation = compactAnchor ?? barRestoreLocation ?? Location;
         settings.X = savedLocation.X;
         settings.Y = savedLocation.Y;
         settings.Save();
@@ -1718,10 +1844,22 @@ internal sealed class WidgetForm : Form
 
     private Point KeepVisible(Point desired)
     {
-        var screen = Screen.FromPoint(desired).WorkingArea;
-        return new Point(Math.Clamp(desired.X, screen.Left, Math.Max(screen.Left, screen.Right - Width)),
-            Math.Clamp(desired.Y, screen.Top, Math.Max(screen.Top, screen.Bottom - Height)));
+        var screen = Screen.FromRectangle(new Rectangle(desired, Size));
+        return PartiallyVisibleLocation(desired, Size, screen.Bounds, screen.WorkingArea, barOnly);
     }
+
+    private static Point PartiallyVisibleLocation(Point desired, Size size, Rectangle screen, Rectangle workArea, bool bar)
+    {
+        var visibleWidth = (int)Math.Ceiling(size.Width * 0.2);
+        var visibleHeight = (int)Math.Ceiling(size.Height * 0.2);
+        return new Point(Math.Clamp(desired.X, screen.Left - size.Width + visibleWidth, screen.Right - visibleWidth),
+            bar ? Math.Clamp(desired.Y, workArea.Top, Math.Max(workArea.Top, workArea.Bottom - size.Height))
+                : Math.Clamp(desired.Y, screen.Top - size.Height + visibleHeight, screen.Bottom - visibleHeight));
+    }
+
+    private static Point FullyVisibleLocation(Point desired, Size size, Rectangle screen) => new(
+        Math.Clamp(desired.X, screen.Left, Math.Max(screen.Left, screen.Right - size.Width)),
+        Math.Clamp(desired.Y, screen.Top, Math.Max(screen.Top, screen.Bottom - size.Height)));
 
     protected override void Dispose(bool disposing)
     {
@@ -1741,7 +1879,9 @@ internal sealed class WidgetForm : Form
             positionSaveTimer.Dispose();
             hoverTimer.Dispose();
             topmostTimer.Dispose();
+            var lastTrayIcon = trayIcon.Icon;
             trayIcon.Dispose();
+            lastTrayIcon?.Dispose();
             appIcon.Dispose();
             borderPen.Dispose();
             controlPen.Dispose();
@@ -1785,6 +1925,25 @@ internal sealed class WidgetForm : Form
         using var font = new Font("Segoe UI", 10, FontStyle.Bold);
         using var brush = new SolidBrush(Color.White);
         g.DrawString("C", font, brush, 9, 7);
+        var handle = bitmap.GetHicon();
+        try { return (Icon)Icon.FromHandle(handle).Clone(); }
+        finally { DestroyIcon(handle); }
+    }
+
+    private static Icon CreateUsageTrayIcon(string number)
+    {
+        using var bitmap = new Bitmap(32, 32);
+        using var g = Graphics.FromImage(bitmap);
+        g.Clear(NormalBackground);
+        g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+        using var normalFont = new Font("Segoe UI", 29f, FontStyle.Bold, GraphicsUnit.Pixel);
+        using var format = new StringFormat(StringFormat.GenericTypographic)
+        {
+            Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center,
+            FormatFlags = StringFormatFlags.NoWrap
+        };
+        using var fitted = PercentageFont(g, number, normalFont, 32, format);
+        g.DrawString(number, fitted, Brushes.White, new RectangleF(0, 0, 32, 32), format);
         var handle = bitmap.GetHicon();
         try { return (Icon)Icon.FromHandle(handle).Clone(); }
         finally { DestroyIcon(handle); }

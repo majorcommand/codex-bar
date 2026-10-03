@@ -9,8 +9,6 @@ internal sealed record UsagePace(
     bool Exhausted)
 {
     // The API supplies a seven-day window and its end, not daily history.
-    // Avoid extrapolating the first few hours into a whole week's forecast.
-    internal static readonly TimeSpan MinimumElapsed = TimeSpan.FromHours(6);
 
     public static UsagePace? Calculate(double usedPercent, DateTimeOffset resetsAt,
         DateTimeOffset observedAt, bool previouslyAbovePace = false)
@@ -20,9 +18,10 @@ internal sealed record UsagePace(
             daysLeft is <= 0 or > 7)
             return null;
 
-        var elapsed = 7 - daysLeft;
+        var elapsed = (TimeSpan.FromDays(7) - (resetsAt - observedAt)).TotalDays;
         var exhausted = usedPercent >= 100;
-        if (elapsed < MinimumElapsed.TotalDays)
+        // At the exact cycle start there is no elapsed time to divide by.
+        if (elapsed <= 0)
             return new UsagePace(daysLeft, null, exhausted ? 0 : null, null, exhausted, exhausted);
 
         var average = usedPercent / elapsed;
