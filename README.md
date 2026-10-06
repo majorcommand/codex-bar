@@ -1,29 +1,29 @@
 # CodexBar — MajorCommand Edition
 
-**A tiny Windows desktop widget for keeping an eye on your weekly Codex limit.**
+**A tiny Windows desktop widget for tracking Codex and Claude usage limits and reset times.**
 
-An independently maintained fork of [jspann21's CodexBar](https://github.com/jspann21/codex-bar), with usage forecasts, two compact faces, reset announcements and visibility diagnostics. The original author created CodexBar; MajorCommand maintains this edition. This project is not affiliated with OpenAI or endorsed by the original author.
+An independently maintained fork of [jspann21's CodexBar](https://github.com/jspann21/codex-bar), with usage forecasts, three compact faces, reset announcements and visibility diagnostics. The original author created CodexBar; MajorCommand maintains this edition. This project is not affiliated with OpenAI or Anthropic, or endorsed by the original author.
 
-**[Download the public beta](https://github.com/majorcommand/codex-bar/releases/tag/v1.2.0-beta.3)** · [All releases](https://github.com/majorcommand/codex-bar/releases) · [Report an issue](https://github.com/majorcommand/codex-bar/issues) · [Changelog](CHANGELOG.md)
+**[Download the public beta](https://github.com/majorcommand/codex-bar/releases/tag/v1.2.0-beta.4)** · [All releases](https://github.com/majorcommand/codex-bar/releases) · [Report an issue](https://github.com/majorcommand/codex-bar/issues) · [Changelog](CHANGELOG.md)
 
-The current MajorCommand release is **1.2.0-beta.3**. The design has been tested locally, but long-running visibility behavior is still being monitored. Please include the version and circumstances when reporting a problem.
+The current MajorCommand release is **1.2.0-beta.4**. The design has been tested locally, but long-running visibility behavior is still being monitored. Please include the version and circumstances when reporting a problem.
 
-CodexBar itself requires no login, API key, or account setup—it automatically reuses your existing signed-in Codex session. Its main face shows remaining weekly capacity, average daily usage, and an estimated forecast. Click to switch to the reset-details face, with larger dates and times for the next weekly reset and every available banked reset expiry. It stays out of the way as a compact, draggable widget and continues updating from the Windows notification area.
+The Codex pages automatically reuse your existing signed-in Codex session. The third page tracks Claude's five-hour and weekly allowance using your existing Claude Code login. The Codex main face shows remaining weekly capacity, average daily usage, and an estimated forecast. Click to switch to the reset-details face, with larger dates and times for the next weekly reset and every available banked reset expiry. It stays out of the way as a compact, draggable widget and continues updating from the Windows notification area.
 
 **Usage overview — Crown layout, illustrative data**
 
-![CodexBar showing weekly capacity remaining, daily usage at the current rate, estimated remaining at reset and a yellow reset-announcement crown](assets/usage-overview-beta3.png)
+![CodexBar showing weekly capacity remaining, daily usage at the current rate, estimated remaining at reset and a yellow reset-announcement crown](assets/usage-overview-beta4.png)
 
 **Reset details — Bottom layout, illustrative data**
 
-![CodexBar showing weekly and banked reset dates with time remaining, plus a yellow reset-announcement row and Source link](assets/reset-details-beta3.png)
+![CodexBar showing weekly and banked reset dates with time remaining, plus a yellow reset-announcement row and Source link](assets/reset-details-beta4.png)
 
-These examples demonstrate both announcement layouts. Choose **Reset announcements → Crown/Bottom** from the menu; the saved choice applies to both faces.
+These examples demonstrate both announcement layouts. Choose **Reset announcements → Crown/Bottom** from the menu; the saved choice applies to both Codex faces.
 
 
 **Forecast warning — illustrative data**
 
-![CodexBar with a dark face and a negative five percent forecast highlighted in muted red with black text](assets/forecast-warning-beta3.png)
+![CodexBar with a dark face and a negative five percent forecast highlighted in muted red with black text](assets/forecast-warning-beta4.png)
 
 The warning highlights only **Est. Remaining at Reset** when it displays zero or below. A negative value shows the projected shortfall, while actual weekly capacity stays separate.
 
@@ -33,17 +33,24 @@ The warning highlights only **Est. Remaining at Reset** when it displays zero or
 
 Click **.** to collapse toward the progress bar. Click the strip to restore the widget, or drag it to reposition.
 
+**Claude allowance — illustrative data**
+
+![Claude five-hour and weekly allowance remaining with local reset dates and countdowns](assets/claude-usage-beta4.png)
+
+The third face uses your Claude Code login. Account usage refreshes every five minutes; right-click and choose **Refresh Claude** for a manual check.
+
 ## Highlights
 
-- Requires no separate login or API key—automatically reuses your existing Codex authentication
+- Reuses your existing Codex authentication and Claude Code login
 - Shows **weekly capacity remaining**, not usage consumed
 - Displays the next reset in your local date and time
 - Lists the exact expiration date and time of every available banked rate-limit reset
 - Changes from green to amber to red as capacity runs low
 - Highlights Est. Remaining at Reset in muted red with black text when average usage predicts running out before reset
-- Switches between usage and reset details with a click; details grow vertically rather than shrinking the text
+- Cycles through Codex usage, Codex reset details and Claude with a click; details grow vertically rather than shrinking the text
 - Keeps the main usage body at 290 × 114 logical pixels, with three prominent percentages, labels below them, reset countdown in the title and the progress bar below
-- Adds a 24-pixel reset-announcement strip on both faces, with a saved Crown or Bottom layout and yellow text for announced or possible resets
+- Shows Claude's five-hour and weekly allowance remaining with reset times and five-minute account reads
+- Adds a 24-pixel reset-announcement strip on both Codex faces, with a saved Crown or Bottom layout and yellow text for announced or possible resets
 - Restores the compact face's position after viewing larger details or hover content, including at screen edges
 - Optionally expands the usage face vertically on hover for larger values and fuller labels, then returns to its compact size when the pointer leaves
 - Refreshes automatically at a configurable interval
@@ -58,6 +65,20 @@ Click **.** to collapse toward the progress bar. Click the strip to restore the 
 
 ## Using the widget
 
+### Claude page
+
+The face cycle is **Codex usage → Codex reset details → Claude → Codex usage**. Click the body, press Space/Enter, or use **Switch face**. Claude shows five-hour and weekly percentages remaining, local reset dates, countdowns and the last successful update time. These allowances are shared with Claude web and desktop. Codex reset announcements stay on the two Codex faces; the tray number remains Codex weekly usage. Collapsing Claude shows its weekly allowance.
+
+Sign in through Claude Code using `claude auth login --claudeai`, then choose **Refresh Claude**. Signing into the Claude desktop interface alone does not necessarily provide a valid Claude Code login. If Claude Code is bundled with Desktop and is not on PATH, run `auth login --claudeai` with that installation's `claude.exe`. Claude owns sign-in and token renewal; the widget will ask you to sign in again when credentials expire or are rejected.
+
+Following [steipete/CodexBar's Claude integration](https://github.com/steipete/CodexBar/blob/main/docs/claude.md), the widget reads `claudeAiOauth` from `%USERPROFILE%\.claude\.credentials.json` (or `CLAUDE_CONFIG_DIR\.credentials.json` when set). It sends the existing profile-scoped access token only to the fixed HTTPS endpoint `https://api.anthropic.com/api/oauth/usage`, with redirects disabled. This account endpoint is not a stable public API and may change. CodexBar does not write credentials, renew tokens, copy them into its preferences, or persist Claude usage. No status-line setup is required, and Claude Code need not remain open.
+
+Account reads run every five minutes, independently of Codex refreshes. **Refresh Claude** and **Refresh now** can request an earlier read, with a minimum one-minute interval; server rate-limit delays also apply to manual refreshes. Concurrent reads are prevented. Requests have a fifteen-second deadline and bounded responses.
+
+Missing allowances mean unavailable, never 100% remaining. When Claude supplies an explicit percentage but no reset timestamp, the percentage remains visible with reset time unavailable; this can occur just after a window resets. Temporary read failures preserve the last successful values, marked offline/last known; readings older than ten minutes are stale. Invalid credentials, denied access or changed credentials clear previous account values. Once a window's reset time passes, its percentage becomes unavailable until another successful read; the widget does not invent a refill. No Claude banked reset credits, special reset offers, forecasts or notifications are inferred from these two windows.
+
+### Existing Codex controls
+
 - **Move:** use the title strip or announcement crown as a drag handle. Hovering either never expands the widget, and starting a drag there collapses hover content while keeping the handle under the pointer. Existing body dragging is also supported.
 - **Collapse to a bar:** click the title's **.** button, or choose **Collapse to progress bar** in the menu, to leave a 290 × 8 strip at the progress bar's existing screen position, preserving its fill width and side spacing. Reset details collapse toward the bottom of that face. The strip stays within the usable screen vertically. Click the bar or press Space/Enter to restore the page and its original position; dragging the strip moves the restored widget by the same distance. Hover does not expand it, and announcements are hidden until restored. The **-** and **x** buttons still hide the widget to the tray. Bar mode is temporary; a fresh launch opens the normal widget.
 - **Tray percentage:** the notification icon shows the rounded weekly percentage remaining as high-contrast digits, without a percent sign. Hover shows the percentage and reset time. It updates at the selected refresh interval even when hidden or collapsed, and shows a dash with an unavailable/offline tooltip when no live reading is available. The app and launch-shortcut icons keep their branding.
@@ -65,7 +86,7 @@ Click **.** to collapse toward the progress bar. Click the strip to restore the 
 - **Reset details:** uses a 290-pixel width shared with the main face for readable date and countdown columns. Under **Full Weekly Reset**, the local date/time sits on the left and time remaining on the right. **Banked Reset Expiries** lists numbered date/time rows with matching right-aligned countdowns, without years or duplicate captions. Countdown text remains green on the dark reset-details face. Long date rows fit their available space while keeping the countdown aligned to the right. Weekly time keeps decimal days; banked expiry days round to the nearest whole day, with hours shown below one day and expired entries marked explicitly. Countdown values use the latest successful observation; offline banked countdowns show a dash. Two banked resets fit in a 290 × 198 body, or 290 × 222 including the announcement strip. Very long lists are limited to the screen height; scroll the face to reach the remaining resets. Offline data is marked in the weekly countdown and last-read footer.
 - **Main face:** the large **Weekly Left** percentage sits beside **Daily usage at current rate** and **Est. Remaining at Reset** percentages at 80% of its font size. The percentages normally share the weekly capacity color and have centered labels below them. The daily rate and estimated remaining labels use two lines, with the progress bar below; the main face has a 290 × 114 body, or 290 × 138 including the announcement strip. The title says how long **until reset**. Whenever **Est. Remaining at Reset** displays **0% or a negative percentage**, only that percentage and its label have a muted red background with black text, including forecasts rounded to zero. Negative values show the projected shortfall: for example, **−5%** means projected usage exceeds the weekly allowance by five percentage points. The rest of the face stays dark, and the other percentages and progress bar retain their capacity colour. Hover content highlights its forecast row and includes the estimated time until exhaustion, and the reset-details face expands separately for readable dates.
 - **Hover expansion:** enable **Expand on hover** from the right-click menu. Body entry waits 350 ms before expanding to 290 × 260 including the announcement strip; leaving the body (including moving to the title or announcement strip) waits 450 ms before collapsing to 290 × 138. Body reentry cancels collapse. Open menus postpone changes. Title-strip or crown dragging shrinks immediately once movement crosses the drag threshold; hover expansion stays suppressed after release until the pointer leaves and reenters the body. This option starts off and persists between launches.
-- **Reset announcements:** choose **Reset announcements → Bottom/Crown** from the menu; Bottom is the default and the choice applies to both faces. Either layout adds a fixed 24 pixels, so the compact widget is 290 × 138. The crown has a shaped outline with empty corners. Switching layouts preserves the title's screen position where screen bounds allow. Announced and possible resets keep yellow text on the dark announcement strip, independently of the usage warning. Click the underlined **Source ↗** link to open Codex Resets; hovering the strip shows details and the last successful check. Clicking other strip text does not switch faces.
+- **Reset announcements:** choose **Reset announcements → Bottom/Crown** from the menu; Bottom is the default and the choice applies to both Codex faces. Either layout adds a fixed 24 pixels, so the compact widget is 290 × 138. The crown has a shaped outline with empty corners. Switching layouts preserves the title's screen position where screen bounds allow. Announced and possible resets keep yellow text on the dark announcement strip, independently of the usage warning. Click the underlined **Source ↗** link to open Codex Resets; hovering the strip shows details and the last successful check. Clicking other strip text does not switch faces.
 - **Position:** drag up to 80% beyond any screen edge, leaving at least 20% of the width and height within a monitor. The taskbar area is no longer a drag boundary for the normal widget. Deliberately off-screen placement survives refreshes, page changes and restarting. Larger faces still fit inward when expanded from a fully visible position, then return to the compact face's original location. Body dragging moves that saved location by the same distance. Title-strip dragging collapses hover under the pointer. A collapsed bar stays vertically inside the usable area above the taskbar, but can be tucked horizontally. Choose **Bring fully on screen** in the tray menu to restore the widget inside the usable screen area.
 - **Taskbar:** choose **Show in taskbar — On/Off** from the right-click menu. Off hides the running-window button while leaving the widget visible. The choice persists and applies when restoring the widget from the tray. New or missing settings default to Off; an explicit saved choice is retained. The notification icon and pinned launch shortcut remain available; a pinned shortcut remains visible as a launcher.
 - **Always on top:** while enabled and the widget is visible, a local check every two seconds repairs a lost topmost flag or an ordinary window covering it. Recovery preserves position, size and keyboard focus. It pauses during dragging, menus, modal dialogs and minimization, respects deliberate hiding and Off, and ignores other topmost windows and windows on inactive virtual desktops. This check makes no Codex requests.
@@ -96,10 +117,10 @@ Preferences persist between launches.
 
 | Setting | Options | Default | What it does |
 |---|---|---:|---|
-| Refresh interval | 5 sec, 15 sec, 30 sec, 1 min, 5 min | 15 sec | Controls how often CodexBar requests the current live account limit. |
+| Refresh interval | 5 sec, 15 sec, 30 sec, 1 min, 5 min | 15 sec | Controls how often CodexBar requests the live Codex account limit; Claude reads every five minutes. |
 | Transparency | 100%, 90%, 80%, 70%, 60%, 50% opaque | 90% | Adjusts the entire widget's opacity. |
 | Expand on hover | On / Off | Off | Expands the usage face vertically for larger labels while hovered. |
-| Reset announcements | Bottom / Crown | Bottom | Places the independent tracker's status on both faces; the crown also supports dragging. |
+| Reset announcements | Bottom / Crown | Bottom | Places the independent tracker's status on both Codex faces; the crown also supports dragging. |
 | Always on top | On / Off | On | Keeps the widget above ordinary windows. |
 | Show in taskbar | On / Off | Off | Shows or hides the running-window taskbar button while the widget is visible. |
 | Start with Windows | On / Off | On at first launch | Adds or removes CodexBar from the current user's startup applications; a later Off choice is retained. |
@@ -132,7 +153,7 @@ CodexBar uses the authenticated Codex installation already on your computer:
 4. Finds the seven-day window (`10080` minutes), whether Codex reports it as the primary or secondary limit.
 5. Displays `100 − used_percent`, the weekly reset, and any available banked-reset expirations in your local time zone.
 
-This means CodexBar does not scrape the UI, automate a browser, read authentication tokens directly, or maintain a second login. The default refresh interval is 15 seconds, but you can change it from **Refresh interval** in the tray menu. Each selected interval performs a real authenticated rate-limit read—for example, selecting 5 seconds sends one read every 5 seconds, while selecting 5 minutes sends one every 5 minutes. If a request fails, the widget clearly labels the last successful live value as **Offline** while it retries.
+For Codex, this means the widget does not scrape the UI, automate a browser, read authentication tokens directly, or maintain a second login. Claude uses the separate account reader described above. The default refresh interval is 15 seconds, but you can change it from **Refresh interval** in the tray menu. Each selected interval performs a real authenticated rate-limit read—for example, selecting 5 seconds sends one read every 5 seconds, while selecting 5 minutes sends one every 5 minutes. If a request fails, the widget clearly labels the last successful live value as **Offline** while it retries.
 
 ### Independent reset announcements
 
@@ -159,7 +180,7 @@ Beta builds receive newer betas and stable releases; stable builds receive stabl
 
 ### Download a release
 
-Download from [MajorCommand's Releases page](https://github.com/majorcommand/codex-bar/releases/tag/v1.2.0-beta.3):
+Download from [MajorCommand's Releases page](https://github.com/majorcommand/codex-bar/releases/tag/v1.2.0-beta.4):
 
 - **Portable ZIP:** `CodexBar-MajorCommand-win-x64-portable.zip` includes the .NET runtime. Extract the entire ZIP into a permanent folder, then run `CodexBar.exe`. This is the simplest option if you do not already have .NET installed.
 - **Lightweight EXE:** `CodexBar.exe` requires the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/en-us/download/dotnet/10.0). The release also includes `LICENSE`, `CHANGELOG.md` and `SHA256SUMS.txt`.
@@ -232,6 +253,8 @@ Install the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/en-us/downloa
 ```text
 CodexBar.csproj    Windows Forms project configuration
 WidgetForm.cs      Widget UI, tray menu, rendering, and refresh behavior
+WidgetForm.Claude.cs  Third-face rendering and account refresh
+ClaudeUsage.cs     Read-only Claude account usage client
 UsagePace.cs       Weekly-cycle average and forecast calculation
 VisibilityLog.cs   Rotating local visibility diagnostics
 ResetAnnouncements.cs  Independent reset status, validation and HTTP client
@@ -261,6 +284,8 @@ dotnet run --project tests/CodexBar.Checks -c Release -- artifacts/preview-check
 The checks render sample faces to the optional output folder. They do not contact Codex, send notifications, or save preferences. Confirm the live executable's click, drag, tray controls and appearance separately after building.
 
 Announcement checks use isolated HTTP fixtures by default. To additionally make one read-only request to the live public tracker through the actual client, append `--live-reset-check` after the output path.
+
+Claude checks use isolated credentials and HTTP responses by default. To verify your own signed-in Claude Code account with a read-only request and render its reading, append `--live-claude-check`. This reads existing credentials without changing them.
 
 Update checks also use isolated HTTP fixtures and exercise the actual menu without downloading files, opening a browser or contacting GitHub. Tests cover beta/stable ordering, invalid metadata, response limits, cancellation, timeouts, retry delays and recovery.
 

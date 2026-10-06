@@ -7,7 +7,7 @@ using System.Runtime.InteropServices;
 
 namespace CodexBar;
 
-internal sealed class WidgetForm : Form
+internal sealed partial class WidgetForm : Form
 {
     private const int WidgetWidth = 290;
     private const int WidgetHeight = 114;
@@ -114,11 +114,12 @@ internal sealed class WidgetForm : Form
     // Drawing uses logical pixels so fonts and hit areas scale together with DPI.
     private float UiScale => DeviceDpi / 96f;
     private int LogicalWidth => (int)Math.Round(ClientSize.Width / UiScale);
-    private bool CrownAnnouncements => !barOnly && settings.ResetAnnouncementPlacement == AnnouncementPlacement.Crown;
+    private int ActiveAnnouncementHeight => showClaude ? 0 : AnnouncementHeight;
+    private bool CrownAnnouncements => !barOnly && !showClaude && settings.ResetAnnouncementPlacement == AnnouncementPlacement.Crown;
     private int ContentTop => CrownAnnouncements ? AnnouncementHeight : 0;
     private Rectangle ProgressTrack => new(16, barOnly ? 2 : hoverExpanded ? 110 : WidgetHeight - 15,
         WidgetWidth - 32, !barOnly && hoverExpanded ? 6 : 4);
-    private int LogicalHeight => (int)Math.Round(ClientSize.Height / UiScale) - (barOnly ? 0 : AnnouncementHeight);
+    private int LogicalHeight => (int)Math.Round(ClientSize.Height / UiScale) - (barOnly ? 0 : ActiveAnnouncementHeight);
     private int VisibleExpirationRows => Math.Max(1, (LogicalHeight - ResetRowsTop - DetailsFooterSpace) / ResetRowHeight);
     private PointF LogicalPoint(Point point) => new(point.X / UiScale, point.Y / UiScale - ContentTop);
     private RectangleF AnnouncementBounds => CrownAnnouncements
@@ -170,7 +171,8 @@ internal sealed class WidgetForm : Form
     }
 
     public WidgetForm(AppSettings? preferences = null, VisibilityLog? diagnostics = null,
-        ResetAnnouncementClient? resetAnnouncementsClient = null, ReleaseUpdateClient? releaseUpdateClient = null)
+        ResetAnnouncementClient? resetAnnouncementsClient = null, ReleaseUpdateClient? releaseUpdateClient = null,
+        ClaudeUsageClient? claudeUsageClient = null)
     {
         // Injected preferences keep isolated checks away from the user's log.
         visibilityLog = diagnostics ?? (preferences is null ? new VisibilityLog() : null);
@@ -178,6 +180,7 @@ internal sealed class WidgetForm : Form
         isolatedPreferences = preferences is not null;
         announcementClient = resetAnnouncementsClient ?? new ResetAnnouncementClient();
         updateClient = releaseUpdateClient ?? new ReleaseUpdateClient();
+        claudeClient = claudeUsageClient ?? new ClaudeUsageClient();
         if (!Enum.IsDefined(settings.ResetAnnouncementPlacement))
             settings.ResetAnnouncementPlacement = AnnouncementPlacement.Bottom;
         Exception? startupError = null;
@@ -228,6 +231,13 @@ internal sealed class WidgetForm : Form
         refreshTimer.Tick += async (_, _) => await RefreshUsageAsync();
         refreshTimer.Start();
 
+        claudeTimer = new System.Windows.Forms.Timer { Interval = 5_000 };
+        claudeTimer.Tick += async (_, _) => await RefreshClaudeAsync();
+        if (!isolatedPreferences)
+        {
+            claudeTimer.Start();
+        }
+
         positionSaveTimer = new System.Windows.Forms.Timer { Interval = 400 };
         positionSaveTimer.Tick += (_, _) =>
         {
@@ -264,7 +274,7 @@ internal sealed class WidgetForm : Form
         updateTimer = new System.Windows.Forms.Timer { Interval = 86_400_000 };
         updateTimer.Tick += async (_, _) => await RefreshUpdatesAsync();
         if (!isolatedPreferences) updateTimer.Start();
-        Shown += async (_, _) => await Task.WhenAll(RefreshUsageAsync(), RefreshAnnouncementsAsync(), RefreshUpdatesAsync());
+        Shown += async (_, _) => await Task.WhenAll(RefreshUsageAsync(), RefreshAnnouncementsAsync(), RefreshUpdatesAsync(), RefreshClaudeAsync());
         LocationChanged += (_, _) => QueuePositionSave();
         FormClosing += OnFormClosing;
         KeyPreview = true;
@@ -390,6 +400,11 @@ internal sealed class WidgetForm : Form
             DrawBarOnly(g);
             return;
         }
+        if (showClaude)
+        {
+            DrawClaude(g);
+            return;
+        }
         DrawAnnouncement(g);
         g.TranslateTransform(0, ContentTop);
 
@@ -452,7 +467,7 @@ internal sealed class WidgetForm : Form
     private bool IsInsideWidget(Point point) => ClientRectangle.Contains(point) &&
         (Region?.IsVisible(point) ?? true);
 
-    private bool IsAnnouncement(Point point) => !barOnly && IsInsideWidget(point) &&
+    private bool IsAnnouncement(Point point) => !barOnly && !showClaude && IsInsideWidget(point) &&
         AnnouncementBounds.Contains(point.X / UiScale, point.Y / UiScale);
 
     private bool IsAnnouncementSource(Point point) => IsAnnouncement(point) &&
@@ -478,7 +493,7 @@ internal sealed class WidgetForm : Form
     private void QueueHover(bool expand)
     {
         hoverTimer.Stop();
-        if (!settings.ExpandOnHover || showResetDetails || barOnly) return;
+        if (!settings.ExpandOnHover || showResetDetails || showClaude || barOnly) return;
         if (expand && (!pointerInHoverBody || suppressHoverUntilReentry)) return;
         expandOnNextHoverTick = expand;
         hoverTimer.Interval = expand ? 350 : 450;
@@ -487,7 +502,7 @@ internal sealed class WidgetForm : Form
 
     private void ProcessHoverTick(bool pointerInBody, bool menuVisible)
     {
-        if (!settings.ExpandOnHover || showResetDetails || barOnly)
+        if (!settings.ExpandOnHover || showResetDetails || showClaude || barOnly)
         {
             CancelHover();
             return;
@@ -665,14 +680,16 @@ internal sealed class WidgetForm : Form
     {
         if (barOnly) SetBarOnly(false);
         CancelHover();
-        if (!showResetDetails) compactAnchor = Location;
-        showResetDetails = !showResetDetails;
+        if (!showResetDetails && !showClaude) compactAnchor = Location;
+        if (showResetDetails) { showResetDetails = false; showClaude = true; }
+        else if (showClaude) showClaude = false;
+        else showResetDetails = true;
         firstVisibleExpiration = 0;
         UpdateFaceSize();
-        if (!showResetDetails) compactAnchor = null;
+        if (!showResetDetails && !showClaude) compactAnchor = null;
         Invalidate();
         pointerInHoverBody = IsHoverBody(PointToClient(Cursor.Position));
-        if (!showResetDetails && Visible && pointerInHoverBody)
+        if (!showResetDetails && !showClaude && Visible && pointerInHoverBody)
             QueueHover(true);
     }
 
@@ -680,17 +697,17 @@ internal sealed class WidgetForm : Form
     {
         var screen = Screen.FromControl(this);
         var wasFullyVisible = screen.WorkingArea.Contains(Bounds);
-        var wantedHeight = showResetDetails
+        var wantedHeight = showClaude ? ClaudeHeight : showResetDetails
             ? Math.Max(DetailsMinimumHeight, ResetRowsTop + DetailsFooterSpace +
                 (snapshot?.ResetExpirations.Count ?? 0) * ResetRowHeight)
             : hoverExpanded ? ExpandedUsageHeight : WidgetHeight;
         ClientSize = new Size((int)Math.Round(WidgetWidth * UiScale),
             barOnly ? (int)Math.Round(BarHeight * UiScale)
-                : Math.Min((int)Math.Round((wantedHeight + AnnouncementHeight) * UiScale), screen.WorkingArea.Height));
+                : Math.Min((int)Math.Round((wantedHeight + ActiveAnnouncementHeight) * UiScale), screen.WorkingArea.Height));
         UpdateWidgetRegion();
         // Keep a deliberately dragged larger face in place during refreshes.
         // Only shrinking back to compact restores its separately retained origin.
-        var desired = barOnly || showResetDetails || hoverExpanded ? Location : compactAnchor ?? Location;
+        var desired = barOnly || showResetDetails || showClaude || hoverExpanded ? Location : compactAnchor ?? Location;
         Location = !barOnly && wasFullyVisible ? FullyVisibleLocation(desired, Size, screen.WorkingArea) : KeepVisible(desired);
     }
 
@@ -701,7 +718,7 @@ internal sealed class WidgetForm : Form
         {
             // Keep the strip's fill at the visible progress bar's screen position.
             // The details face has no progress bar, so collapse toward its bottom edge.
-            var progressY = showResetDetails ? LogicalHeight - 15 : ProgressTrack.Top;
+            var progressY = showResetDetails || showClaude ? LogicalHeight - 15 : ProgressTrack.Top;
             var stripLocation = new Point(Left, Top + (int)Math.Round((ContentTop + progressY - 2) * UiScale));
             CancelHover();
             barRestoreLocation = Location;
@@ -736,7 +753,7 @@ internal sealed class WidgetForm : Form
     private GraphicsPath WidgetOutline()
     {
         var outline = new GraphicsPath();
-        var height = LogicalHeight + (barOnly ? 0 : AnnouncementHeight);
+        var height = LogicalHeight + (barOnly ? 0 : ActiveAnnouncementHeight);
         if (CrownAnnouncements)
             outline.AddPolygon(new PointF[]
             {
@@ -773,8 +790,8 @@ internal sealed class WidgetForm : Form
         settings.ResetAnnouncementPlacement = placement;
         var newTop = placement == AnnouncementPlacement.Crown ? AnnouncementHeight : 0;
         var delta = (int)Math.Round((oldTop - newTop) * UiScale);
-        if (!barOnly) Location = new Point(Left, Top + delta);
-        else if (barRestoreLocation is { } restore) barRestoreLocation = new Point(restore.X, restore.Y + delta);
+        if (!barOnly && !showClaude) Location = new Point(Left, Top + delta);
+        else if (barOnly && !showClaude && barRestoreLocation is { } restore) barRestoreLocation = new Point(restore.X, restore.Y + delta);
         if (compactAnchor is { } anchor) compactAnchor = new Point(anchor.X, anchor.Y + delta);
         UpdateFaceSize();
         if (!barOnly && wasFullyVisible) Location = FullyVisibleLocation(Location, Size, area);
@@ -821,7 +838,8 @@ internal sealed class WidgetForm : Form
 
     private void SetAnnouncementTip(bool show)
     {
-        var text = barOnly ? "Click to restore · drag to move" + (!liveConnected ? " · usage offline" : "")
+        var text = showClaude ? "Shared Claude account limits · checked every five minutes. Right-click to refresh."
+            : barOnly ? "Click to restore · drag to move" + (!liveConnected ? " · usage offline" : "")
             : show ? "Data from Codex Resets · " + ResetAnnouncementClient.SourceUrl + "\n" +
             (announcements?.Details(DateTimeOffset.Now) ?? "Checking the independent reset tracker.") +
             (AnnouncementStale(DateTimeOffset.Now) ? "\nStatus unavailable or stale; check the source." : "") +
@@ -951,8 +969,11 @@ internal sealed class WidgetForm : Form
         menu.Items.Add("Collapse to progress bar", null, (_, _) => SetBarOnly(true));
         menu.Items.Add("Bring fully on screen", null, (_, _) => { BringFullyOnScreen(); ShowWidget(); });
         menu.Items.Add("Switch face", null, (_, _) => ToggleFace());
+        menu.Items.Add("Refresh Claude", null, async (_, _) => await RefreshClaudeAsync(manual: true));
         menu.Items.Add("Refresh now", null, async (_, _) =>
-            await Task.WhenAll(RefreshUsageAsync(), RefreshAnnouncementsAsync()));
+        {
+            await Task.WhenAll(RefreshUsageAsync(), RefreshAnnouncementsAsync(), RefreshClaudeAsync(manual: true));
+        });
         menu.Items.Add(new ToolStripMenuItem($"MajorCommand Edition · {editionVersion}") { Enabled = false });
         var downloadUpdate = new ToolStripMenuItem("Update available…") { Name = "availableUpdate", Visible = false };
         downloadUpdate.Click += (_, _) => OpenUpdatePage();
@@ -1375,6 +1396,15 @@ internal sealed class WidgetForm : Form
     private void DrawBarOnly(Graphics g)
     {
         g.DrawRectangle(borderPen, 0.5f, 0.5f, WidgetWidth - 1, BarHeight - 1);
+        if (showClaude)
+        {
+            var now = DateTimeOffset.UtcNow;
+            var week = claudeReading?.SevenDay;
+            var known = week is not null && !week.Expired(now);
+            DrawProgress(g, known ? week!.Remaining : 0,
+                known && !claudeReading!.Stale(now) ? RemainingColor(week!.Remaining) : dimBrush.Color);
+            return;
+        }
         var remaining = snapshot is null ? 0 : Math.Clamp(100 - snapshot.UsedPercent, 0, 100);
         DrawProgress(g, remaining, liveConnected ? RemainingColor(remaining) : dimBrush.Color);
     }
@@ -1456,10 +1486,10 @@ internal sealed class WidgetForm : Form
     {
         var more = showResetDetails && snapshot is not null &&
             snapshot.ResetExpirations.Count > VisibleExpirationRows;
-        var text = more ? "Scroll for more · click for usage · 2/2"
-            : showResetDetails ? "Click for usage · 2/2" : "Click for reset details · 1 / 2";
+        var text = more ? "Scroll · click for Claude · 2/3"
+            : showResetDetails ? "Click for Claude · 2/3" : "Click for reset details · 1/3";
         if (showResetDetails && snapshot is not null && !liveConnected)
-            text = $"Offline · read {snapshot.CapturedAt.ToLocalTime():h:mm tt} · {(more ? "scroll · " : "")}2/2";
+            text = $"Offline · read {snapshot.CapturedAt.ToLocalTime():h:mm tt} · {(more ? "scroll · " : "")}2/3";
         g.DrawString(text, resetFont, dimBrush, 20, LogicalHeight - 24);
     }
 
@@ -1875,6 +1905,10 @@ internal sealed class WidgetForm : Form
             announcementCancellation.Dispose();
             announcementTip.Dispose();
             liveClient.Dispose();
+            claudeTimer.Dispose();
+            claudeCancellation.Cancel();
+            claudeClient.Dispose();
+            claudeCancellation.Dispose();
             refreshTimer.Dispose();
             positionSaveTimer.Dispose();
             hoverTimer.Dispose();

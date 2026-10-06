@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 using System.Text.Json;
 using CodexBar;
 
-internal static class Checks
+internal static partial class Checks
 {
     private static int passed;
     private static readonly DateTimeOffset Now = new(2026, 10, 1, 12, 0, 0, TimeSpan.Zero);
@@ -245,6 +245,7 @@ internal static class Checks
         Save(form, output, "long-dates-and-hours");
         SetSnapshot(form, 10, 4, 2);
         Click(form, 40, 70);
+        Click(form, 40, 70); // Third face is Claude; next click returns to Codex.
         Check("Click returns to overview", !(bool)Get(form, "showResetDetails")!);
         Check("Returning restores compact dimensions", form.ClientSize ==
             new Size((int)Math.Round(290 * form.DeviceDpi / 96f), (int)Math.Round(138 * form.DeviceDpi / 96f)));
@@ -254,7 +255,7 @@ internal static class Checks
         Invoke(form, "OnMouseMove", tinyMove);
         Invoke(form, "OnMouseUp", tinyMove);
         Check("Small pointer movement remains a click", (bool)Get(form, "showResetDetails")!);
-        Invoke(form, "ToggleFace");
+        NextCodexFace(form);
 
         Invoke(form, "OnMouseDown", new MouseEventArgs(MouseButtons.Left, 1, (int)(40 * scale), (int)(70 * scale), 0));
         form.Capture = false;
@@ -273,7 +274,7 @@ internal static class Checks
         Check("Above-pace reset details keep the normal dark background", form.BackColor == Color.FromArgb(8, 10, 9) &&
             (bool)Get(form, "abovePace")!);
         Save(form, output, "warning-details");
-        Invoke(form, "ToggleFace");
+        NextCodexFace(form);
         Save(form, output, "above-pace");
         Check("Only the compact forecast column has a red warning background",
             RenderPixel(form, 276, 33) == Color.FromArgb(132, 38, 48) &&
@@ -288,7 +289,7 @@ internal static class Checks
         SetSnapshot(form, 0, 7 - 1d / 24, 0);
         Check("New cycle clears warning", !(bool)Get(form, "abovePace")!);
         Save(form, output, "new-cycle");
-        Invoke(form, "ToggleFace");
+        NextCodexFace(form);
         Save(form, output, "no-banked-resets");
         SetSnapshot(form, 10, 4, 6);
         Check("Details grows rather than shrinking text", form.ClientSize.Height > smallHeight);
@@ -307,7 +308,7 @@ internal static class Checks
         Save(form, output, "shrunk-expiry-list");
         Check("Shortened expiry list resets the visible index", (int)Get(form, "firstVisibleExpiration")! == 0);
 
-        Invoke(form, "ToggleFace");
+        NextCodexFace(form);
         var preferences = (AppSettings)Get(form, "settings")!;
         var hoverTimer = (System.Windows.Forms.Timer)Get(form, "hoverTimer")!;
         EnterBody(form);
@@ -364,17 +365,17 @@ internal static class Checks
         Invoke(form, "QueueHover", false);
         HoverTick(form, false);
         Check("Collapse restores compact position", form.Location == compactPosition);
-        Invoke(form, "ToggleFace");
+        NextCodexFace(form);
         Check("Details fits inward at screen edge", area.Contains(form.Bounds));
-        Invoke(form, "ToggleFace");
+        NextCodexFace(form);
         Check("Returning from details restores the original position", form.Location == compactPosition);
         for (var i = 0; i < 3; i++)
         {
-            Invoke(form, "ToggleFace");
-            Invoke(form, "ToggleFace");
+            NextCodexFace(form);
+            NextCodexFace(form);
         }
         Check("Repeated page switches do not drift", form.Location == compactPosition);
-        Invoke(form, "ToggleFace");
+        NextCodexFace(form);
         SetSnapshot(form, 10, 4, 6);
         Check("Details refresh preserves compact anchor", (Point)Get(form, "compactAnchor")! == compactPosition);
         SetSnapshot(form, 10, 4, 2);
@@ -386,7 +387,7 @@ internal static class Checks
         var draggedPosition = form.Location;
         SetSnapshot(form, 10, 4, 2);
         Check("Refresh keeps dragged details in place", form.Location == draggedPosition);
-        Invoke(form, "ToggleFace");
+        NextCodexFace(form);
         Check("Dragging details translates compact position without resize drift", form.Location == compactPosition + dragDelta);
         compactPosition = form.Location;
 
@@ -402,7 +403,7 @@ internal static class Checks
         Check("Hover-to-details preserves compact anchor", (Point)Get(form, "compactAnchor")! == compactPosition);
         EnterBody(form);
         Check("Details face does not hover-resize", !hoverTimer.Enabled);
-        Invoke(form, "ToggleFace");
+        NextCodexFace(form);
         Check("Hover-to-details-to-compact restores location", form.Location == compactPosition);
         EnterBody(form);
         HoverTick(form, true);
@@ -597,6 +598,8 @@ internal static class Checks
             sessionEntry.GetProperty("details").GetString()!.Contains("managedVisible=") &&
             sessionEntry.GetProperty("session").GetString()!.Length == 32);
 
+        CheckClaude(output);
+        if (args.Contains("--live-claude-check")) CheckLiveClaude(output);
         ResetAnnouncementChecks.Run(Check);
         ReleaseUpdateChecks.Run(Check);
         CheckReleaseUpdateMenu();
@@ -619,7 +622,7 @@ internal static class Checks
             {
                 using var client = new ReleaseUpdateClient();
                 var installed = await client.ReadAsync(EditionVersion.Current);
-                var older = await client.ReadAsync(EditionVersion.Parse("1.2.0-beta.2")!);
+                var older = await client.ReadAsync(EditionVersion.Parse("1.2.0-beta.3")!);
                 return (installed, older);
             }).GetAwaiter().GetResult();
             Check("Live GitHub releases do not offer an update to this beta", updates.installed is null);
@@ -635,7 +638,7 @@ internal static class Checks
         using var handler = new ResetAnnouncementChecks.Handler((_, _) => Task.FromResult(unavailable
             ? new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.BadGateway)
             : ResetAnnouncementChecks.JsonResponse(newer
-                ? ReleaseUpdateChecks.Releases(ReleaseUpdateChecks.Release("v1.2.0-beta.4")) : "[]")));
+                ? ReleaseUpdateChecks.Releases(ReleaseUpdateChecks.Release("v1.2.0-beta.5")) : "[]")));
         using var widget = new WidgetForm(new AppSettings { AlwaysOnTop = false },
             releaseUpdateClient: new ReleaseUpdateClient(handler));
         foreach (var name in new[] { "refreshTimer", "positionSaveTimer", "hoverTimer", "topmostTimer" })
@@ -647,7 +650,7 @@ internal static class Checks
         var download = (ToolStripMenuItem)widget.ContextMenuStrip.Items["availableUpdate"]!;
         var originalSize = widget.Size;
         ((Task)Invoke(widget, "RefreshUpdatesAsync", false)!).GetAwaiter().GetResult();
-        Check("Actual form exposes a new beta download without resizing", download.Available && download.Text!.Contains("1.2.0-beta.4") &&
+        Check("Actual form exposes a new beta download without resizing", download.Available && download.Text!.Contains("1.2.0-beta.5") &&
             Get(widget, "availableUpdate") is ReleaseUpdate && widget.Size == originalSize);
         ((Task)Invoke(widget, "RefreshUpdatesAsync", true)!).GetAwaiter().GetResult();
         Check("Repeated manual clicks are throttled", handler.Calls == 1);
@@ -692,10 +695,10 @@ internal static class Checks
         Check("Announcement strip does not trigger hover expansion", !((System.Windows.Forms.Timer)Get(widget, "hoverTimer")!).Enabled);
         Check("Visible source credit has its own link hit area", (bool)Invoke(widget, "IsAnnouncementSource",
             new Point((int)(240 * scale), (int)(126 * scale)))!);
-        Invoke(widget, "ToggleFace");
+        NextCodexFace(widget);
         Save(widget, output, "announcement-bottom-details");
         Check("Page two has its announcement without losing expiry rows", widget.Height == (int)Math.Round(222 * scale));
-        Invoke(widget, "ToggleFace");
+        NextCodexFace(widget);
         var layout = widget.ContextMenuStrip!.Items.OfType<ToolStripMenuItem>().Single(item => item.Name == "resetAnnouncements");
         var crown = layout.DropDownItems.OfType<ToolStripMenuItem>().Single(item => item.Name == "Crown");
         var bottom = layout.DropDownItems.OfType<ToolStripMenuItem>().Single(item => item.Name == "Bottom");
@@ -733,7 +736,7 @@ internal static class Checks
         Click(widget, 40, 94);
         Check("Crown layout body click still switches pages", (bool)Get(widget, "showResetDetails")!);
         Save(widget, output, "announcement-crown-details");
-        Invoke(widget, "ToggleFace");
+        NextCodexFace(widget);
         EnterBody(widget);
         HoverTick(widget, true);
         Check("Crown survives hover expansion", (bool)Get(widget, "hoverExpanded")! && widget.Height == (int)Math.Round(260 * scale) && widget.Region is not null);
@@ -746,7 +749,7 @@ internal static class Checks
         var area = Screen.FromControl(widget).WorkingArea;
         widget.Location = new Point(area.Right - widget.Width, area.Bottom - widget.Height);
         var edge = widget.Location;
-        for (var i = 0; i < 3; i++) { Invoke(widget, "ToggleFace"); Invoke(widget, "ToggleFace"); }
+        for (var i = 0; i < 3; i++) { NextCodexFace(widget); NextCodexFace(widget); }
         Check("Crown page switches at screen edge retain their anchor", widget.Location == edge && area.Contains(widget.Bounds));
         bottom.PerformClick();
         crown.PerformClick();
@@ -932,7 +935,7 @@ internal static class Checks
             details.Top + (int)Math.Round((details.Height / scale - 24 - 17) * scale));
         Click(widget, 40, 4);
         Check("Collapsing details restores that same page and geometry", (bool)Get(widget, "showResetDetails")! && widget.Bounds == details);
-        Invoke(widget, "ToggleFace");
+        NextCodexFace(widget);
         EnterBody(widget);
         HoverTick(widget, true);
         Check("Hover is still available before collapse", (bool)Get(widget, "hoverExpanded")!);
@@ -976,7 +979,7 @@ internal static class Checks
         Check("Actual title drag allows a partially off-screen position", widget.Location == offScreen);
         SetSnapshot(widget, 20, 5, 2);
         Check("Refresh preserves deliberately off-screen placement", widget.Location == offScreen);
-        for (var i = 0; i < 3; i++) { Invoke(widget, "ToggleFace"); Invoke(widget, "ToggleFace"); }
+        for (var i = 0; i < 3; i++) { NextCodexFace(widget); NextCodexFace(widget); }
         Check("Off-screen page switches retain their anchor", widget.Location == offScreen);
         Invoke(widget, "SetBarOnly", true);
         Check("Off-screen collapse leaves the bar vertically reachable", screen.WorkingArea.Top <= widget.Top && widget.Bottom <= screen.WorkingArea.Bottom);

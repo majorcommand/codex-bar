@@ -4,6 +4,13 @@ All notable changes to CodexBar are documented here.
 
 ## [Unreleased]
 
+## [1.2.0-beta.4] - 2026-10-06
+
+- Adds a third Claude face with five-hour and weekly allowance remaining, local reset times, countdowns, last update time and offline/stale/expired states.
+- Reads Claude account usage every five minutes using the existing Claude Code login, with bounded requests, rate-limit backoff and a Refresh Claude menu action. Credentials remain managed by Claude; no status-line setup is required.
+- Handles Claude returning usage without a reset time after a window ends, retaining the available percentages and showing the missing reset time explicitly.
+- Cycles through Codex usage, Codex reset details and Claude. Keeps Codex announcements on the Codex faces and the tray number tied to Codex; collapsing Claude uses its weekly allowance.
+
 ## [1.2.0-beta.3] - 2026-10-03
 
 - Keeps the collapsed strip at the visible progress bar's screen position with matching fill width and side spacing. Restores the original widget position and preserves relative movement when dragging the strip.

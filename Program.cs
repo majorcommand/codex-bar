@@ -9,8 +9,13 @@ internal static class Program
     private static extern int SetCurrentProcessExplicitAppUserModelID(string appId);
 
     [STAThread]
-    private static void Main()
+    private static void Main(string[] args)
     {
+        if (args is ["--claude-statusline"])
+        {
+            // Older preview settings may still invoke this retired collector. Do not open a widget.
+            return;
+        }
         _ = SetCurrentProcessExplicitAppUserModelID("CodexBar.Desktop");
         ApplicationConfiguration.Initialize();
         using var mutex = new Mutex(true, "Local\\CodexBar.SingleInstance", out var firstInstance);
