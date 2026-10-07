@@ -2,6 +2,10 @@
 
 All notable changes to CodexBar are documented here.
 
+## [1.2.0-beta.6] - 2026-10-07
+
+- Adds a weekly forecast to the Claude page using the existing Codex pace calculation. Shows a large estimated percentage left at reset and a short status, warns near or beyond the limit, and withholds forecasts for stale, expired or incomplete readings. Simplifies the Claude footer for easier scanning.
+
 ## [1.2.0-beta.5] - 2026-10-07
 
 - Automatically delegates expiring or rejected Claude credentials to native Claude Code for renewal, then rereads the credential before fetching stats. Supports standalone and Desktop-bundled installations, bounded background processes and retry recovery without storing widget copies of tokens.

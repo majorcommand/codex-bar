@@ -2,7 +2,7 @@ namespace CodexBar;
 
 internal sealed partial class WidgetForm
 {
-    private const int ClaudeHeight = 264;
+    private const int ClaudeHeight = 274;
     private bool showClaude;
     private ClaudeReading? claudeReading;
     private readonly System.Windows.Forms.Timer claudeTimer;
@@ -30,18 +30,47 @@ internal sealed partial class WidgetForm
             claudeReading.Error is not null ? "OFFLINE" : stale ? "STALE" : "CONNECTED"),
             titleFont, dimBrush, 20, 14);
         DrawWindowControls(g);
-        DrawClaudeWindow(g, "Five-hour allowance", claudeReading?.FiveHour, 42, now, stale);
-        DrawClaudeWindow(g, "Weekly allowance", claudeReading?.SevenDay, 126, now, stale);
+        DrawClaudeWindow(g, "5-hour remaining", claudeReading?.FiveHour, 42, now, stale);
+        DrawClaudeWindow(g, "Weekly remaining", claudeReading?.SevenDay, 126, now, stale);
         using var format = new StringFormat { FormatFlags = StringFormatFlags.NoWrap, Trimming = StringTrimming.EllipsisCharacter };
+        var forecast = ClaudeWeeklyPace(now);
+        g.DrawString("Est. left at reset", compactFont, dimBrush, 16, 210);
+        using var forecastBrush = new SolidBrush(ClaudeForecastColor(forecast));
+        g.DrawString(ClaudeForecastText(forecast), compactLabelFont, forecastBrush, 16, 230);
+        using var right = new StringFormat { Alignment = StringAlignment.Far, FormatFlags = StringFormatFlags.NoWrap };
+        DrawPercentage(g, ClaudeForecastPercent(forecast), compactPercentFont, forecastBrush, new RectangleF(176, 204, 98, 34), right);
         var received = claudeReading is null ? "Checking Claude account usage…" :
             claudeReading.Error is not null ? claudeReading.Error :
             $"Updated {claudeReading.ReceivedAt.ToLocalTime():ddd d MMM h:mm tt}";
-        g.DrawString(received, resetFont, dimBrush, new RectangleF(16, 212, 260, 17), format);
-        g.DrawString(claudeReading is { Error: null, FiveHour: null, SevenDay: null }
-            ? "No allowance supplied by Claude"
-            : "Shared with Claude web and desktop", compactLabelFont, dimBrush, 16, 229);
-        g.DrawString("Click for Codex usage · 3/3", resetFont, dimBrush, 16, 246);
+        g.DrawString(received, resetFont, dimBrush, new RectangleF(16, 254, 260, 17), format);
     }
+
+    private UsagePace? ClaudeWeeklyPace(DateTimeOffset now)
+    {
+        if (claudeReading is not { SevenDay.ResetsAt: { } reset } reading ||
+            reading.Stale(now) || reading.SevenDay.Expired(now)) return null;
+        // Use the observation time, as Codex does. Idle time must not improve a cached forecast.
+        return UsagePace.Calculate(reading.SevenDay.UsedPercentage, reset, reading.ReceivedAt);
+    }
+
+    private string ClaudeForecastText(UsagePace? forecast)
+    {
+        if (forecast?.Exhausted == true) return "Limit reached";
+        if (forecast?.RemainingAtReset is not { } projected) return "Unavailable";
+        if (Math.Round(projected) == 0) return "Near limit";
+        return projected < 0 ? "Over weekly pace" : "On track";
+    }
+
+    private string ClaudeForecastPercent(UsagePace? forecast)
+    {
+        if (forecast?.RemainingAtReset is not { } projected) return forecast?.Exhausted == true ? "0%" : "—";
+        var rounded = Math.Round(Math.Min(projected, 100));
+        return $"{(rounded == 0 ? 0 : rounded):0}%";
+    }
+
+    private Color ClaudeForecastColor(UsagePace? forecast) =>
+        forecast?.Exhausted == true || forecast?.RemainingAtReset is { } projected && (projected < 0 || Math.Round(projected) == 0) ? RemainingColor(0) :
+        forecast?.RemainingAtReset is not null ? RemainingColor(100) : dimBrush.Color;
 
     private void DrawClaudeWindow(Graphics g, string label, ClaudeWindow? window,
         float top, DateTimeOffset now, bool stale)

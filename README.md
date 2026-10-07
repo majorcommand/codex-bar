@@ -4,9 +4,9 @@
 
 An independently maintained fork of [jspann21's CodexBar](https://github.com/jspann21/codex-bar), with usage forecasts, three compact faces, reset announcements and visibility diagnostics. The original author created CodexBar; MajorCommand maintains this edition. This project is not affiliated with OpenAI or Anthropic, or endorsed by the original author.
 
-**[Download the public beta](https://github.com/majorcommand/codex-bar/releases/tag/v1.2.0-beta.5)** · [All releases](https://github.com/majorcommand/codex-bar/releases) · [Report an issue](https://github.com/majorcommand/codex-bar/issues) · [Changelog](CHANGELOG.md)
+**[Download the public beta](https://github.com/majorcommand/codex-bar/releases/tag/v1.2.0-beta.6)** · [All releases](https://github.com/majorcommand/codex-bar/releases) · [Report an issue](https://github.com/majorcommand/codex-bar/issues) · [Changelog](CHANGELOG.md)
 
-The current MajorCommand release is **1.2.0-beta.5**. The design has been tested locally, but long-running visibility behavior is still being monitored. Please include the version and circumstances when reporting a problem.
+The current MajorCommand release is **1.2.0-beta.6**. The design has been tested locally, but long-running visibility behavior is still being monitored. Please include the version and circumstances when reporting a problem.
 
 The Codex pages automatically reuse your existing signed-in Codex session. The third page tracks Claude's five-hour and weekly allowance using your existing Claude Code login. The Codex main face shows remaining weekly capacity, average daily usage, and an estimated forecast. Click to switch to the reset-details face, with larger dates and times for the next weekly reset and every available banked reset expiry. It stays out of the way as a compact, draggable widget and continues updating from the Windows notification area.
 
@@ -35,7 +35,7 @@ Click **.** to collapse toward the progress bar. Click the strip to restore the 
 
 **Claude allowance — illustrative data**
 
-![Claude five-hour and weekly allowance remaining with local reset dates and countdowns](assets/claude-usage-beta4.png)
+![Claude five-hour and weekly allowance remaining with local reset details and a large estimated percentage left at reset](assets/claude-usage-beta6.png)
 
 The third face uses your Claude Code login. Account usage refreshes every five minutes; right-click and choose **Refresh Claude** for a manual check.
 
@@ -75,7 +75,9 @@ Following [steipete/CodexBar's Claude integration](https://github.com/steipete/C
 
 Account reads run every five minutes, independently of Codex refreshes. **Refresh Claude** and **Refresh now** can request an earlier read, with a minimum one-minute interval; server rate-limit delays also apply to manual refreshes. Concurrent reads are prevented. Usage requests have a fifteen-second deadline and bounded responses. Native renewal has a twenty-five-second deadline, closes standard input, disables MCP startup and Remote Control for that process, and discards bounded output. It runs a fixed `/status` probe in an isolated local folder without saving a conversation. Failed recovery is retried at the normal interval; manual refreshes cannot launch repeated probes within one minute. Desktop CLI discovery follows installed version directories so Desktop updates do not leave the widget pinned to an old executable. A permanently revoked login still requires sign-in; no PowerShell window needs to remain open.
 
-Missing allowances mean unavailable, never 100% remaining. When Claude supplies an explicit percentage but no reset timestamp, the percentage remains visible with reset time unavailable; this can occur just after a window resets. Temporary read failures preserve the last successful values, marked offline/last known; readings older than ten minutes are stale. Invalid credentials, denied access or changed credentials clear previous account values. Once a window's reset time passes, its percentage becomes unavailable until another successful read; the widget does not invent a refill. No Claude banked reset credits, special reset offers, forecasts or notifications are inferred from these two windows.
+Missing allowances mean unavailable, never 100% remaining. When Claude supplies an explicit percentage but no reset timestamp, the percentage remains visible with reset time unavailable; this can occur just after a window resets. Temporary read failures preserve the last successful values, marked offline/last known; readings older than ten minutes are stale. Invalid credentials, denied access or changed credentials clear previous account values. Once a window's reset time passes, its percentage becomes unavailable until another successful read; the widget does not invent a refill. No Claude banked reset credits, special reset offers or notifications are inferred from these two windows.
+
+The Claude page shows a large **Est. left at reset** percentage with a short status below the weekly allowance, using the same seven-day average and projection as Codex. It shows green **On track** alongside the estimated percentage left at reset, or red when the forecast rounds to 0% or predicts reaching the limit before reset. A fully used allowance says **Limit reached**. The calculation uses the last reading's capture time, so idle time cannot improve a cached forecast. Stale/offline readings, missing or passed reset times, invalid windows and the exact start of a week have no forecast. Estimates become available as soon as any cycle time has elapsed and can fluctuate sharply early in the week. This is the widget's projection of unchanged average usage, not Anthropic's own status message. The five-hour allowance remains independent.
 
 ### Existing Codex controls
 
@@ -180,7 +182,7 @@ Beta builds receive newer betas and stable releases; stable builds receive stabl
 
 ### Download a release
 
-Download from [MajorCommand's Releases page](https://github.com/majorcommand/codex-bar/releases/tag/v1.2.0-beta.5):
+Download from [MajorCommand's Releases page](https://github.com/majorcommand/codex-bar/releases/tag/v1.2.0-beta.6):
 
 - **Portable ZIP:** `CodexBar-MajorCommand-win-x64-portable.zip` includes the .NET runtime. Extract the entire ZIP into a permanent folder, then run `CodexBar.exe`. This is the simplest option if you do not already have .NET installed.
 - **Lightweight EXE:** `CodexBar.exe` requires the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/en-us/download/dotnet/10.0). The release also includes `LICENSE`, `CHANGELOG.md` and `SHA256SUMS.txt`.
