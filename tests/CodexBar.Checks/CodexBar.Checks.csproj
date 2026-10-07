@@ -5,10 +5,11 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Version>1.2.0-beta.4</Version>
+    <Version>1.2.0-beta.5</Version>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../ClaudeUsage.cs" Link="ClaudeUsage.cs" />
+    <Compile Include="../../ClaudeCodeRenewal.cs" Link="ClaudeCodeRenewal.cs" />
     <Compile Include="../../WidgetForm.Claude.cs" Link="WidgetForm.Claude.cs" />
     <Compile Include="../../UsagePace.cs" Link="UsagePace.cs" />
     <Compile Include="../../VisibilityLog.cs" Link="VisibilityLog.cs" />

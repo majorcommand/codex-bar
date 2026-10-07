@@ -27,6 +27,7 @@ internal static partial class Checks
     [STAThread]
     private static void Main(string[] args)
     {
+        if (RunClaudeRenewalFixture(args)) return;
         ApplicationConfiguration.Initialize();
         var output = args.Length > 0 ? Path.GetFullPath(args[0]) : null;
         if (output is not null) Directory.CreateDirectory(output);
@@ -600,6 +601,7 @@ internal static partial class Checks
 
         CheckClaude(output);
         if (args.Contains("--live-claude-check")) CheckLiveClaude(output);
+        if (args.Contains("--live-claude-renewal-check")) CheckLiveClaudeRenewal(output);
         ResetAnnouncementChecks.Run(Check);
         ReleaseUpdateChecks.Run(Check);
         CheckReleaseUpdateMenu();
@@ -622,7 +624,7 @@ internal static partial class Checks
             {
                 using var client = new ReleaseUpdateClient();
                 var installed = await client.ReadAsync(EditionVersion.Current);
-                var older = await client.ReadAsync(EditionVersion.Parse("1.2.0-beta.3")!);
+                var older = await client.ReadAsync(EditionVersion.Parse("1.2.0-beta.4")!);
                 return (installed, older);
             }).GetAwaiter().GetResult();
             Check("Live GitHub releases do not offer an update to this beta", updates.installed is null);
@@ -638,7 +640,7 @@ internal static partial class Checks
         using var handler = new ResetAnnouncementChecks.Handler((_, _) => Task.FromResult(unavailable
             ? new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.BadGateway)
             : ResetAnnouncementChecks.JsonResponse(newer
-                ? ReleaseUpdateChecks.Releases(ReleaseUpdateChecks.Release("v1.2.0-beta.5")) : "[]")));
+                ? ReleaseUpdateChecks.Releases(ReleaseUpdateChecks.Release("v1.2.0-beta.6")) : "[]")));
         using var widget = new WidgetForm(new AppSettings { AlwaysOnTop = false },
             releaseUpdateClient: new ReleaseUpdateClient(handler));
         foreach (var name in new[] { "refreshTimer", "positionSaveTimer", "hoverTimer", "topmostTimer" })
@@ -650,7 +652,7 @@ internal static partial class Checks
         var download = (ToolStripMenuItem)widget.ContextMenuStrip.Items["availableUpdate"]!;
         var originalSize = widget.Size;
         ((Task)Invoke(widget, "RefreshUpdatesAsync", false)!).GetAwaiter().GetResult();
-        Check("Actual form exposes a new beta download without resizing", download.Available && download.Text!.Contains("1.2.0-beta.5") &&
+        Check("Actual form exposes a new beta download without resizing", download.Available && download.Text!.Contains("1.2.0-beta.6") &&
             Get(widget, "availableUpdate") is ReleaseUpdate && widget.Size == originalSize);
         ((Task)Invoke(widget, "RefreshUpdatesAsync", true)!).GetAwaiter().GetResult();
         Check("Repeated manual clicks are throttled", handler.Calls == 1);

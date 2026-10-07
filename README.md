@@ -4,9 +4,9 @@
 
 An independently maintained fork of [jspann21's CodexBar](https://github.com/jspann21/codex-bar), with usage forecasts, three compact faces, reset announcements and visibility diagnostics. The original author created CodexBar; MajorCommand maintains this edition. This project is not affiliated with OpenAI or Anthropic, or endorsed by the original author.
 
-**[Download the public beta](https://github.com/majorcommand/codex-bar/releases/tag/v1.2.0-beta.4)** · [All releases](https://github.com/majorcommand/codex-bar/releases) · [Report an issue](https://github.com/majorcommand/codex-bar/issues) · [Changelog](CHANGELOG.md)
+**[Download the public beta](https://github.com/majorcommand/codex-bar/releases/tag/v1.2.0-beta.5)** · [All releases](https://github.com/majorcommand/codex-bar/releases) · [Report an issue](https://github.com/majorcommand/codex-bar/issues) · [Changelog](CHANGELOG.md)
 
-The current MajorCommand release is **1.2.0-beta.4**. The design has been tested locally, but long-running visibility behavior is still being monitored. Please include the version and circumstances when reporting a problem.
+The current MajorCommand release is **1.2.0-beta.5**. The design has been tested locally, but long-running visibility behavior is still being monitored. Please include the version and circumstances when reporting a problem.
 
 The Codex pages automatically reuse your existing signed-in Codex session. The third page tracks Claude's five-hour and weekly allowance using your existing Claude Code login. The Codex main face shows remaining weekly capacity, average daily usage, and an estimated forecast. Click to switch to the reset-details face, with larger dates and times for the next weekly reset and every available banked reset expiry. It stays out of the way as a compact, draggable widget and continues updating from the Windows notification area.
 
@@ -69,11 +69,11 @@ The third face uses your Claude Code login. Account usage refreshes every five m
 
 The face cycle is **Codex usage → Codex reset details → Claude → Codex usage**. Click the body, press Space/Enter, or use **Switch face**. Claude shows five-hour and weekly percentages remaining, local reset dates, countdowns and the last successful update time. These allowances are shared with Claude web and desktop. Codex reset announcements stay on the two Codex faces; the tray number remains Codex weekly usage. Collapsing Claude shows its weekly allowance.
 
-Sign in through Claude Code using `claude auth login --claudeai`, then choose **Refresh Claude**. Signing into the Claude desktop interface alone does not necessarily provide a valid Claude Code login. If Claude Code is bundled with Desktop and is not on PATH, run `auth login --claudeai` with that installation's `claude.exe`. Claude owns sign-in and token renewal; the widget will ask you to sign in again when credentials expire or are rejected.
+Sign in through Claude Code using `claude auth login --claudeai`, then choose **Refresh Claude**. Signing into the Claude desktop interface alone does not necessarily provide a valid Claude Code login. If Claude Code is bundled with Desktop and is not on PATH, run `auth login --claudeai` with that installation's `claude.exe`. Claude owns sign-in and credential writes. The widget asks native Claude Code to renew within five minutes of access-token expiry, after expiry, or after an authentication rejection, then rereads the credential and retries the usage request once. You only need another sign-in when Claude can no longer renew the saved login.
 
-Following [steipete/CodexBar's Claude integration](https://github.com/steipete/CodexBar/blob/main/docs/claude.md), the widget reads `claudeAiOauth` from `%USERPROFILE%\.claude\.credentials.json` (or `CLAUDE_CONFIG_DIR\.credentials.json` when set). It sends the existing profile-scoped access token only to the fixed HTTPS endpoint `https://api.anthropic.com/api/oauth/usage`, with redirects disabled. This account endpoint is not a stable public API and may change. CodexBar does not write credentials, renew tokens, copy them into its preferences, or persist Claude usage. No status-line setup is required, and Claude Code need not remain open.
+Following [steipete/CodexBar's Claude integration](https://github.com/steipete/CodexBar/blob/main/docs/claude.md), the widget reads `claudeAiOauth` from `%USERPROFILE%\.claude\.credentials.json` (or `CLAUDE_CONFIG_DIR\.credentials.json` when set). It sends the existing profile-scoped access token only to the fixed HTTPS endpoint `https://api.anthropic.com/api/oauth/usage`, with redirects disabled. This account endpoint is not a stable public API and may change. CodexBar does not write credentials directly, copy them into its preferences, or persist Claude usage. Renewal runs through Claude Code, which can update its own credential file. No status-line setup is required, and Claude Code need not remain open.
 
-Account reads run every five minutes, independently of Codex refreshes. **Refresh Claude** and **Refresh now** can request an earlier read, with a minimum one-minute interval; server rate-limit delays also apply to manual refreshes. Concurrent reads are prevented. Requests have a fifteen-second deadline and bounded responses.
+Account reads run every five minutes, independently of Codex refreshes. **Refresh Claude** and **Refresh now** can request an earlier read, with a minimum one-minute interval; server rate-limit delays also apply to manual refreshes. Concurrent reads are prevented. Usage requests have a fifteen-second deadline and bounded responses. Native renewal has a twenty-five-second deadline, closes standard input, disables MCP startup and Remote Control for that process, and discards bounded output. It runs a fixed `/status` probe in an isolated local folder without saving a conversation. Failed recovery is retried at the normal interval; manual refreshes cannot launch repeated probes within one minute. Desktop CLI discovery follows installed version directories so Desktop updates do not leave the widget pinned to an old executable. A permanently revoked login still requires sign-in; no PowerShell window needs to remain open.
 
 Missing allowances mean unavailable, never 100% remaining. When Claude supplies an explicit percentage but no reset timestamp, the percentage remains visible with reset time unavailable; this can occur just after a window resets. Temporary read failures preserve the last successful values, marked offline/last known; readings older than ten minutes are stale. Invalid credentials, denied access or changed credentials clear previous account values. Once a window's reset time passes, its percentage becomes unavailable until another successful read; the widget does not invent a refill. No Claude banked reset credits, special reset offers, forecasts or notifications are inferred from these two windows.
 
@@ -180,7 +180,7 @@ Beta builds receive newer betas and stable releases; stable builds receive stabl
 
 ### Download a release
 
-Download from [MajorCommand's Releases page](https://github.com/majorcommand/codex-bar/releases/tag/v1.2.0-beta.4):
+Download from [MajorCommand's Releases page](https://github.com/majorcommand/codex-bar/releases/tag/v1.2.0-beta.5):
 
 - **Portable ZIP:** `CodexBar-MajorCommand-win-x64-portable.zip` includes the .NET runtime. Extract the entire ZIP into a permanent folder, then run `CodexBar.exe`. This is the simplest option if you do not already have .NET installed.
 - **Lightweight EXE:** `CodexBar.exe` requires the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/en-us/download/dotnet/10.0). The release also includes `LICENSE`, `CHANGELOG.md` and `SHA256SUMS.txt`.
@@ -255,6 +255,7 @@ CodexBar.csproj    Windows Forms project configuration
 WidgetForm.cs      Widget UI, tray menu, rendering, and refresh behavior
 WidgetForm.Claude.cs  Third-face rendering and account refresh
 ClaudeUsage.cs     Read-only Claude account usage client
+ClaudeCodeRenewal.cs  Bounded native Claude Code credential renewal
 UsagePace.cs       Weekly-cycle average and forecast calculation
 VisibilityLog.cs   Rotating local visibility diagnostics
 ResetAnnouncements.cs  Independent reset status, validation and HTTP client
@@ -285,7 +286,7 @@ The checks render sample faces to the optional output folder. They do not contac
 
 Announcement checks use isolated HTTP fixtures by default. To additionally make one read-only request to the live public tracker through the actual client, append `--live-reset-check` after the output path.
 
-Claude checks use isolated credentials and HTTP responses by default. To verify your own signed-in Claude Code account with a read-only request and render its reading, append `--live-claude-check`. This reads existing credentials without changing them.
+Claude checks use isolated credentials and HTTP responses by default. To verify your own signed-in Claude Code account with a read-only request and render its reading, append `--live-claude-check`. This reads existing credentials and may delegate renewal to Claude Code when needed. Append `--live-claude-renewal-check` to exercise the real native renewal path with an in-memory expired timestamp, then reread native credentials and retrieve live usage; the test does not edit the credential file to manufacture expiry.
 
 Update checks also use isolated HTTP fixtures and exercise the actual menu without downloading files, opening a browser or contacting GitHub. Tests cover beta/stable ordering, invalid metadata, response limits, cancellation, timeouts, retry delays and recovery.
 

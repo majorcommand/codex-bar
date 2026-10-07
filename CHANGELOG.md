@@ -2,7 +2,9 @@
 
 All notable changes to CodexBar are documented here.
 
-## [Unreleased]
+## [1.2.0-beta.5] - 2026-10-07
+
+- Automatically delegates expiring or rejected Claude credentials to native Claude Code for renewal, then rereads the credential before fetching stats. Supports standalone and Desktop-bundled installations, bounded background processes and retry recovery without storing widget copies of tokens.
 
 ## [1.2.0-beta.4] - 2026-10-06
 

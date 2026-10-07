@@ -19,7 +19,9 @@ internal sealed record ClaudeReading(DateTimeOffset ReceivedAt, ClaudeWindow? Fi
     public bool Stale(DateTimeOffset now) => Error is not null || now - ReceivedAt >= TimeSpan.FromMinutes(10);
 }
 
-// Read-only account usage. Claude owns login/renewal; no tokens or usage are written to disk.
+internal sealed record ClaudeLogin(string AccessToken, DateTimeOffset? ExpiresAt, bool CanRenew);
+
+// Read-only account usage. Native Claude Code owns credential writes and renewal.
 internal sealed class ClaudeUsageClient : IDisposable
 {
     internal const string UsageUrl = "https://api.anthropic.com/api/oauth/usage";
@@ -27,6 +29,7 @@ internal sealed class ClaudeUsageClient : IDisposable
     private readonly HttpClient http;
     private readonly Func<string> credentials;
     private readonly Func<DateTimeOffset> clock;
+    private readonly Func<CancellationToken, Task<bool>> renewCredentials;
     private readonly SemaphoreSlim gate = new(1, 1);
     private DateTimeOffset nextAutomaticRead;
     private DateTimeOffset notBefore;
@@ -34,13 +37,16 @@ internal sealed class ClaudeUsageClient : IDisposable
     public ClaudeReading? Current { get; private set; }
 
     public ClaudeUsageClient(HttpMessageHandler? handler = null, Func<string>? credentials = null,
-        Func<DateTimeOffset>? clock = null)
+        Func<DateTimeOffset>? clock = null, Func<CancellationToken, Task<bool>>? renewCredentials = null)
     {
         http = new HttpClient(handler ?? new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
         http.Timeout = TimeSpan.FromSeconds(15);
         http.DefaultRequestHeaders.UserAgent.ParseAdd("CodexBar-MajorCommand/" + EditionVersion.Current);
         this.credentials = credentials ?? ReadCredentials;
         this.clock = clock ?? (() => DateTimeOffset.UtcNow);
+        // Injected credential fixtures must never launch the user's real Claude installation.
+        this.renewCredentials = renewCredentials ?? (credentials is null ? ClaudeCodeRenewal.TryRenewAsync :
+            _ => Task.FromResult(false));
     }
 
     internal static string ReadCredentials()
@@ -59,6 +65,13 @@ internal sealed class ClaudeUsageClient : IDisposable
 
     internal static string ReadToken(string json, DateTimeOffset now)
     {
+        var login = ReadLogin(json);
+        if (login.ExpiresAt is { } expiry && expiry <= now) throw new InvalidDataException();
+        return login.AccessToken;
+    }
+
+    internal static ClaudeLogin ReadLogin(string json)
+    {
         if (json.Length > MaxBytes) throw new InvalidDataException();
         using var document = JsonDocument.Parse(json);
         var oauth = Property(document.RootElement, "claudeAiOauth");
@@ -70,10 +83,17 @@ internal sealed class ClaudeUsageClient : IDisposable
             s.ValueKind == JsonValueKind.String && s.GetString() == "user:profile")) throw new InvalidDataException();
         var expiry = Property(oauth, "expiresAt", required: false);
         // Missing expiry is not Unix epoch zero; some Claude credentials omit it.
-        if (expiry.ValueKind != JsonValueKind.Undefined &&
-            (expiry.ValueKind != JsonValueKind.Number || !expiry.TryGetInt64(out var milliseconds) || DateTimeOffset.FromUnixTimeMilliseconds(milliseconds) <= now))
+        DateTimeOffset? expiresAt = null;
+        if (expiry.ValueKind != JsonValueKind.Undefined)
+        {
+            if (expiry.ValueKind != JsonValueKind.Number || !expiry.TryGetInt64(out var milliseconds))
+                throw new InvalidDataException();
+            expiresAt = DateTimeOffset.FromUnixTimeMilliseconds(milliseconds);
+        }
+        var refresh = Property(oauth, "refreshToken", required: false);
+        if (refresh.ValueKind is not (JsonValueKind.Undefined or JsonValueKind.Null or JsonValueKind.String))
             throw new InvalidDataException();
-        return token;
+        return new(token, expiresAt, refresh.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(refresh.GetString()));
     }
 
     internal static ClaudeReading Parse(string json, DateTimeOffset now)
@@ -124,8 +144,8 @@ internal sealed class ClaudeUsageClient : IDisposable
             if (now < notBefore || !manual && now < nextAutomaticRead) return;
             notBefore = now.AddMinutes(1);
             nextAutomaticRead = now.AddMinutes(5);
-            string token;
-            try { token = ReadToken(credentials(), now); }
+            ClaudeLogin login;
+            try { login = ReadLogin(credentials()); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or
                 JsonException or InvalidOperationException or ArgumentException)
             {
@@ -133,51 +153,108 @@ internal sealed class ClaudeUsageClient : IDisposable
                 Current = new(now, null, null, "Sign in to Claude Code, then Refresh.");
                 return;
             }
-            var fingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
-            // Changed credentials may belong to another account. Do not carry old values across them.
-            if (fingerprint != tokenFingerprint) Current = null;
-            tokenFingerprint = fingerprint;
-            using var request = new HttpRequestMessage(HttpMethod.Get, UsageUrl);
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-            request.Headers.Add("anthropic-beta", "oauth-2025-04-20");
-            try
+            var renewed = false;
+            if (login.CanRenew && login.ExpiresAt is { } expiry && expiry <= now.AddMinutes(5))
             {
-                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                timeout.CancelAfter(TimeSpan.FromSeconds(15));
-                using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token).ConfigureAwait(false);
-                if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+                renewed = true;
+                var latest = await RenewAsync(cancellationToken).ConfigureAwait(false);
+                if (latest is null)
                 {
-                    Current = new(now, null, null, response.StatusCode == HttpStatusCode.Unauthorized
-                        ? "Sign in to Claude Code, then Refresh." : "Claude denied usage access.");
+                    Current = new(now, null, null, "Claude renewal failed; retrying.");
                     return;
                 }
-                if ((int)response.StatusCode == 429)
-                {
-                    var retry = response.Headers.RetryAfter?.Date ?? now + (response.Headers.RetryAfter?.Delta ?? TimeSpan.FromMinutes(5));
-                    notBefore = retry > now.AddMinutes(1) ? retry : now.AddMinutes(1);
-                    Fail("Claude busy; waiting before retry.", now);
-                    return;
-                }
-                if (!response.IsSuccessStatusCode)
-                {
-                    Fail("Claude unavailable; will retry.", now);
-                    return;
-                }
-                if (response.Content.Headers.ContentLength > MaxBytes) throw new InvalidDataException();
-                await using var stream = await response.Content.ReadAsStreamAsync(timeout.Token).ConfigureAwait(false);
-                var buffer = new byte[MaxBytes + 1];
-                var length = await stream.ReadAtLeastAsync(buffer, buffer.Length, throwOnEndOfStream: false, timeout.Token).ConfigureAwait(false);
-                if (length > MaxBytes) throw new InvalidDataException();
-                Current = Parse(Encoding.UTF8.GetString(buffer, 0, length), clock());
+                login = latest;
             }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
-            catch (Exception ex) when (ex is HttpRequestException or IOException or OperationCanceledException or
-                JsonException or InvalidDataException or InvalidOperationException or ArgumentException)
+            if (login.ExpiresAt is { } expired && expired <= clock())
             {
-                Fail("Claude read failed; will retry.", now);
+                Current = new(now, null, null, login.CanRenew
+                    ? "Claude renewal failed; retrying." : "Sign in to Claude Code, then Refresh.");
+                return;
+            }
+            AdoptLogin(login);
+            for (var attempt = 0; attempt < 2; attempt++)
+            {
+                var token = login.AccessToken;
+                using var request = new HttpRequestMessage(HttpMethod.Get, UsageUrl);
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+                request.Headers.Add("anthropic-beta", "oauth-2025-04-20");
+                try
+                {
+                    using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                    timeout.CancelAfter(TimeSpan.FromSeconds(15));
+                    using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token).ConfigureAwait(false);
+                    if (response.StatusCode == HttpStatusCode.Unauthorized && !renewed && login.CanRenew)
+                    {
+                        renewed = true;
+                        var latest = await RenewAsync(cancellationToken).ConfigureAwait(false);
+                        if (latest is not null)
+                        {
+                            login = latest;
+                            AdoptLogin(login);
+                            continue;
+                        }
+                    }
+                    if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+                    {
+                        Current = new(now, null, null, response.StatusCode == HttpStatusCode.Unauthorized
+                            ? "Claude login rejected; sign in again." : "Claude denied usage access.");
+                        return;
+                    }
+                    if ((int)response.StatusCode == 429)
+                    {
+                        var retry = response.Headers.RetryAfter?.Date ?? now + (response.Headers.RetryAfter?.Delta ?? TimeSpan.FromMinutes(5));
+                        notBefore = retry > now.AddMinutes(1) ? retry : now.AddMinutes(1);
+                        Fail("Claude busy; waiting before retry.", now);
+                        return;
+                    }
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        Fail("Claude unavailable; will retry.", now);
+                        return;
+                    }
+                    if (response.Content.Headers.ContentLength > MaxBytes) throw new InvalidDataException();
+                    await using var stream = await response.Content.ReadAsStreamAsync(timeout.Token).ConfigureAwait(false);
+                    var buffer = new byte[MaxBytes + 1];
+                    var length = await stream.ReadAtLeastAsync(buffer, buffer.Length, throwOnEndOfStream: false, timeout.Token).ConfigureAwait(false);
+                    if (length > MaxBytes) throw new InvalidDataException();
+                    Current = Parse(Encoding.UTF8.GetString(buffer, 0, length), clock());
+                    return;
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+                catch (Exception ex) when (ex is HttpRequestException or IOException or OperationCanceledException or
+                    JsonException or InvalidDataException or InvalidOperationException or ArgumentException)
+                {
+                    Fail("Claude read failed; will retry.", now);
+                    return;
+                }
             }
         }
         finally { gate.Release(); }
+    }
+
+    private void AdoptLogin(ClaudeLogin login)
+    {
+        var fingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(login.AccessToken)));
+        // Changed credentials may belong to another account. Do not carry old values across them.
+        if (fingerprint != tokenFingerprint) Current = null;
+        tokenFingerprint = fingerprint;
+    }
+
+    private async Task<ClaudeLogin?> RenewAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await renewCredentials(cancellationToken).ConfigureAwait(false);
+            // Process success is not proof of renewal. Only the reread native credential counts.
+            var latest = ReadLogin(credentials());
+            return latest.ExpiresAt is { } expiry && expiry <= clock() ? null : latest;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or
+            JsonException or InvalidOperationException or ArgumentException or OperationCanceledException)
+        {
+            return null;
+        }
     }
 
     private void Fail(string message, DateTimeOffset now) =>

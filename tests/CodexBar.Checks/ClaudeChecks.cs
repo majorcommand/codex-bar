@@ -14,6 +14,7 @@ internal static partial class Checks
     private static void CheckClaude(string? output)
     {
         Task.Run(CheckClaudeApiAsync).GetAwaiter().GetResult();
+        Task.Run(CheckClaudeRenewalAsync).GetAwaiter().GetResult();
         CheckClaudeFormRefresh();
         var now = DateTimeOffset.UtcNow;
         var reading = new ClaudeReading(now, new ClaudeWindow(23.5, now.AddHours(3)), new ClaudeWindow(41.2, now.AddDays(4)));
