@@ -6,6 +6,22 @@ namespace CodexBar;
 // Delegate renewal to the owner of the shared credential, including Desktop's bundled CLI.
 internal static class ClaudeCodeRenewal
 {
+    internal static string? InstalledVersion()
+    {
+        try
+        {
+            var executable = FindExecutable();
+            if (executable is null) return null;
+            var text = FileVersionInfo.GetVersionInfo(executable).ProductVersion;
+            if (!Version.TryParse(text, out var version) || version.Build < 0) return null;
+            return $"{version.Major}.{version.Minor}.{version.Build}";
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or Win32Exception)
+        {
+            return null;
+        }
+    }
+
     internal static string? FindExecutable(string? userProfile = null, string? roamingData = null, string? path = null)
     {
         userProfile ??= Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);

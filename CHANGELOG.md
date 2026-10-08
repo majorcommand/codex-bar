@@ -2,6 +2,15 @@
 
 All notable changes to the tracker (formerly CodexBar — MajorCommand Edition) are documented here.
 
+## [1.3.0] - 2026-10-08
+
+- Splits Claude into compact usage and reset-details pages. The face cycle is Codex usage, Codex resets, Claude usage, Claude resets. Both Codex layouts remain unchanged apart from their four-page numbering.
+- Shows Claude's five-hour and weekly allowance remaining beside the existing Codex-based weekly forecast, with a short status and weekly progress bar.
+- Separates scheduled five-hour/weekly resets from optional reset credits, showing credit type, remaining uses, local expiry and time left. Credits are read from Claude's account response; missing inventory stays unavailable rather than implying zero credits.
+- Adds an Open Claude usage link for manual redemption. Does not redeem credits or change their meaning. Retains native credential renewal, account-change isolation, polling limits and offline states; unsupported inventory requests fall back once to ordinary usage.
+- Preserves collapse positioning and page restoration, including at screen edges; long credit lists scroll within the screen height.
+- Restores Claude usage to the saved compact position after the taller Codex reset page fits upward, preserving bottom alignment at the screen edge.
+
 ## [1.2.0] - 2026-10-08
 
 - Adds a GitHub social preview showing usage forecasts, reset countdowns and Claude allowances together.

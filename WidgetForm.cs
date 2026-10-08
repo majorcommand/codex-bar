@@ -117,7 +117,7 @@ internal sealed partial class WidgetForm : Form
     private int ActiveAnnouncementHeight => showClaude ? 0 : AnnouncementHeight;
     private bool CrownAnnouncements => !barOnly && !showClaude && settings.ResetAnnouncementPlacement == AnnouncementPlacement.Crown;
     private int ContentTop => CrownAnnouncements ? AnnouncementHeight : 0;
-    private Rectangle ProgressTrack => new(16, barOnly ? 2 : hoverExpanded ? 110 : WidgetHeight - 15,
+    private Rectangle ProgressTrack => new(16, barOnly ? 2 : showClaude ? 106 : hoverExpanded ? 110 : WidgetHeight - 15,
         WidgetWidth - 32, !barOnly && hoverExpanded ? 6 : 4);
     private int LogicalHeight => (int)Math.Round(ClientSize.Height / UiScale) - (barOnly ? 0 : ActiveAnnouncementHeight);
     private int VisibleExpirationRows => Math.Max(1, (LogicalHeight - ResetRowsTop - DetailsFooterSpace) / ResetRowHeight);
@@ -557,7 +557,7 @@ internal sealed partial class WidgetForm : Form
             UpdateHoverTarget(IsHoverBody(e.Location));
             SetAnnouncementTip(IsAnnouncement(e.Location));
             var point = LogicalPoint(e.Location);
-            Cursor = barOnly ? Cursors.SizeAll : IsAnnouncementSource(e.Location) ? Cursors.Hand
+            Cursor = barOnly ? Cursors.SizeAll : IsAnnouncementSource(e.Location) || IsClaudeUsageLink(e.Location) ? Cursors.Hand
                 : CrownAnnouncements && point.Y < 0 ||
                     point.Y >= 0 && point.Y <= TitleHeight && point.X < LogicalWidth - 90
                     ? Cursors.SizeAll : Cursors.Default;
@@ -603,6 +603,7 @@ internal sealed partial class WidgetForm : Form
         var wasTitle = titlePress;
         var wasAnnouncement = announcementPress;
         var start = LogicalPoint(PointToClient(mouseDownScreen.Value));
+        var wasClaudeLink = IsClaudeUsageLink(PointToClient(mouseDownScreen.Value));
         var point = LogicalPoint(e.Location);
         mouseDownScreen = null;
         dragging = false;
@@ -644,6 +645,11 @@ internal sealed partial class WidgetForm : Form
             if (hoverExpanded) QueueHover(false);
             return;
         }
+        if (wasClaudeLink)
+        {
+            if (IsClaudeUsageLink(e.Location)) OpenClaudeUsage();
+            return;
+        }
         ToggleFace();
     }
 
@@ -670,7 +676,15 @@ internal sealed partial class WidgetForm : Form
     protected override void OnMouseWheel(MouseEventArgs e)
     {
         base.OnMouseWheel(e);
-        if (barOnly || !showResetDetails || snapshot is null) return;
+        if (barOnly) return;
+        if (showClaudeResets)
+        {
+            firstVisibleClaudeReset = Math.Clamp(firstVisibleClaudeReset - Math.Sign(e.Delta), 0,
+                Math.Max(0, AvailableClaudeResets.Count - VisibleClaudeResetRows));
+            Invalidate();
+            return;
+        }
+        if (!showResetDetails || snapshot is null) return;
         firstVisibleExpiration = Math.Clamp(firstVisibleExpiration - Math.Sign(e.Delta),
             0, Math.Max(0, snapshot.ResetExpirations.Count - VisibleExpirationRows));
         Invalidate();
@@ -680,12 +694,18 @@ internal sealed partial class WidgetForm : Form
     {
         if (barOnly) SetBarOnly(false);
         CancelHover();
+        var returningToClaudeUsage = showResetDetails;
         if (!showResetDetails && !showClaude) compactAnchor = Location;
         if (showResetDetails) { showResetDetails = false; showClaude = true; }
-        else if (showClaude) showClaude = false;
+        else if (showClaude && !showClaudeResets) showClaudeResets = true;
+        else if (showClaude) { showClaude = false; showClaudeResets = false; }
         else showResetDetails = true;
         firstVisibleExpiration = 0;
+        firstVisibleClaudeReset = 0;
         UpdateFaceSize();
+        // The taller details page may have fitted upward at the screen edge.
+        // Claude usage shares the compact page's size and should return to its origin.
+        if (returningToClaudeUsage && compactAnchor is { } anchor) Location = KeepVisible(anchor);
         if (!showResetDetails && !showClaude) compactAnchor = null;
         Invalidate();
         pointerInHoverBody = IsHoverBody(PointToClient(Cursor.Position));
@@ -697,7 +717,7 @@ internal sealed partial class WidgetForm : Form
     {
         var screen = Screen.FromControl(this);
         var wasFullyVisible = screen.WorkingArea.Contains(Bounds);
-        var wantedHeight = showClaude ? ClaudeHeight : showResetDetails
+        var wantedHeight = showClaude ? showClaudeResets ? ClaudeResetHeight : ClaudeHeight : showResetDetails
             ? Math.Max(DetailsMinimumHeight, ResetRowsTop + DetailsFooterSpace +
                 (snapshot?.ResetExpirations.Count ?? 0) * ResetRowHeight)
             : hoverExpanded ? ExpandedUsageHeight : WidgetHeight;
@@ -718,7 +738,7 @@ internal sealed partial class WidgetForm : Form
         {
             // Keep the strip's fill at the visible progress bar's screen position.
             // The details face has no progress bar, so collapse toward its bottom edge.
-            var progressY = showResetDetails || showClaude ? LogicalHeight - 15 : ProgressTrack.Top;
+            var progressY = showResetDetails || showClaudeResets ? LogicalHeight - 15 : ProgressTrack.Top;
             var stripLocation = new Point(Left, Top + (int)Math.Round((ContentTop + progressY - 2) * UiScale));
             CancelHover();
             barRestoreLocation = Location;
@@ -969,6 +989,7 @@ internal sealed partial class WidgetForm : Form
         menu.Items.Add("Collapse to progress bar", null, (_, _) => SetBarOnly(true));
         menu.Items.Add("Bring fully on screen", null, (_, _) => { BringFullyOnScreen(); ShowWidget(); });
         menu.Items.Add("Switch face", null, (_, _) => ToggleFace());
+        menu.Items.Add("Open Claude usage ↗", null, (_, _) => OpenClaudeUsage());
         menu.Items.Add("Refresh Claude", null, async (_, _) => await RefreshClaudeAsync(manual: true));
         menu.Items.Add("Refresh now", null, async (_, _) =>
         {
@@ -1487,10 +1508,10 @@ internal sealed partial class WidgetForm : Form
     {
         var more = showResetDetails && snapshot is not null &&
             snapshot.ResetExpirations.Count > VisibleExpirationRows;
-        var text = more ? "Scroll · click for Claude · 2/3"
-            : showResetDetails ? "Click for Claude · 2/3" : "Click for reset details · 1/3";
+        var text = more ? "Scroll · click for Claude · 2/4"
+            : showResetDetails ? "Click for Claude · 2/4" : "Click for reset details · 1/4";
         if (showResetDetails && snapshot is not null && !liveConnected)
-            text = $"Offline · read {snapshot.CapturedAt.ToLocalTime():h:mm tt} · {(more ? "scroll · " : "")}2/3";
+            text = $"Offline · read {snapshot.CapturedAt.ToLocalTime():h:mm tt} · {(more ? "scroll · " : "")}2/4";
         g.DrawString(text, resetFont, dimBrush, 20, LogicalHeight - 24);
     }
 

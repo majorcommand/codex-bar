@@ -18,15 +18,16 @@ try {
     $drawing.DrawString('Usage and Reset Tracker', $titleFont, $white, 88, 96)
     $drawing.DrawString('MajorCommand Edition  |  Windows desktop widget', $labelFont, $muted, 88, 175)
     $faces = @(
-        @{ Label = 'Usage & forecasts'; File = 'usage-overview-beta4.png'; X = 88 },
-        @{ Label = 'Reset dates & countdowns'; File = 'reset-details-beta4.png'; X = 470 },
-        @{ Label = 'Claude allowances'; File = 'claude-usage-beta6.png'; X = 852 }
+        @{ Label = 'Codex usage'; File = 'usage-overview-1.3.png'; X = 60 },
+        @{ Label = 'Codex resets'; File = 'reset-details-1.3.png'; X = 357 },
+        @{ Label = 'Claude usage'; File = 'claude-usage-1.3.png'; X = 654 },
+        @{ Label = 'Claude resets'; File = 'claude-resets-1.3.png'; X = 951 }
     )
     foreach ($face in $faces) {
         $drawing.DrawString($face.Label, $labelFont, $white, $face.X, 248)
         $screenshot = [System.Drawing.Image]::FromFile((Join-Path $PSScriptRoot $face.File))
         try {
-            $drawing.DrawImage($screenshot, [System.Drawing.Rectangle]::new($face.X, 292, 310, [int][Math]::Round($screenshot.Height * 310 / $screenshot.Width)))
+            $drawing.DrawImage($screenshot, [System.Drawing.Rectangle]::new($face.X, 292, 270, [int][Math]::Round($screenshot.Height * 270 / $screenshot.Width)))
         } finally { $screenshot.Dispose() }
     }
     $drawing.DrawString('github.com/majorcommand/codex-bar', $smallFont, $green, 88, 598)

@@ -4,19 +4,21 @@ using CodexBar;
 internal static partial class Checks
 {
     // Keep the existing Codex layout/hover checks focused on their two original faces.
-    // The third face and complete navigation cycle are exercised separately below.
+    // Both Claude faces and the complete navigation cycle are exercised separately below.
     private static void NextCodexFace(WidgetForm form)
     {
         Invoke(form, "ToggleFace");
-        if ((bool)Get(form, "showClaude")!) Invoke(form, "ToggleFace");
+        while ((bool)Get(form, "showClaude")!) Invoke(form, "ToggleFace");
     }
 
     private static void CheckClaude(string? output)
     {
         Task.Run(CheckClaudeApiAsync).GetAwaiter().GetResult();
+        Task.Run(CheckClaudeResetApiAsync).GetAwaiter().GetResult();
         Task.Run(CheckClaudeRenewalAsync).GetAwaiter().GetResult();
         CheckClaudeFormRefresh();
         CheckClaudeForecast(output);
+        CheckClaudeResetForm(output);
         var now = DateTimeOffset.UtcNow;
         var reading = new ClaudeReading(now, new ClaudeWindow(23.5, now.AddHours(3)), new ClaudeWindow(41.2, now.AddDays(4)));
 
@@ -27,12 +29,12 @@ internal static partial class Checks
         ((NotifyIcon)Get(widget, "trayIcon")!).Visible = false;
         InitializeForm(widget);
         var overview = widget.Bounds;
-        // Real mouse and keyboard handlers: Codex -> reset details -> Claude -> Codex.
+        // Real mouse and keyboard handlers cycle through all four faces.
         Click(widget, 40, 70);
         Check("First click opens Codex details", (bool)Get(widget, "showResetDetails")!);
         Click(widget, 40, 70);
         Check("Second click opens Claude even when Codex is unavailable", (bool)Get(widget, "showClaude")! && !(bool)Get(widget, "showResetDetails")!);
-        Check("Claude page has its own height", widget.Height == (int)Math.Round(274 * widget.DeviceDpi / 96f));
+        Check("Claude usage has compact height", widget.Height == (int)Math.Round(138 * widget.DeviceDpi / 96f));
         Save(widget, output, "claude-setup");
         Set(widget, "claudeReading", reading);
         Save(widget, output, "claude-usage");
@@ -50,6 +52,7 @@ internal static partial class Checks
         Set(widget, "claudeReading", reading);
         var claudeBounds = widget.Bounds;
         Invoke(widget, "SetBarOnly", true);
+        Check("Claude usage collapse keeps the weekly bar's vertical position", widget.Top == claudeBounds.Top + (int)Math.Round(104 * widget.DeviceDpi / 96f));
         Check("Collapsed Claude bar uses Claude weekly allowance", (bool)Get(widget, "showClaude")! &&
             RenderPixel(widget, 20, 3) == (Color)typeof(WidgetForm).GetMethod("RemainingColor", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!
                 .Invoke(null, new object[] { reading.SevenDay!.Remaining })!);
@@ -60,13 +63,19 @@ internal static partial class Checks
         Save(widget, output, "claude-crown-preference");
         Invoke(widget, "ChangeAnnouncementPlacement", AnnouncementPlacement.Bottom);
         Invoke(widget, "OnKeyDown", new KeyEventArgs(Keys.Enter));
-        Check("Third page returns to Codex overview and original geometry", !(bool)Get(widget, "showClaude")! &&
+        Check("Enter opens Claude reset details", (bool)Get(widget, "showClaudeResets")! && (bool)Get(widget, "showClaude")!);
+        Invoke(widget, "OnKeyDown", new KeyEventArgs(Keys.Space));
+        Check("Fourth page returns to Codex overview and original geometry", !(bool)Get(widget, "showClaude")! &&
             !(bool)Get(widget, "showResetDetails")! && widget.Bounds == overview);
         for (var i = 0; i < 3; i++)
         {
-            Invoke(widget, "ToggleFace"); Invoke(widget, "ToggleFace"); Invoke(widget, "ToggleFace");
+            for (var page = 0; page < 4; page++) Invoke(widget, "ToggleFace");
         }
-        Check("Three-page cycles do not drift", widget.Bounds == overview);
+        Check("Four-page cycles do not drift", widget.Bounds == overview);
+        // Public illustrations use synthetic values, never the live account fixtures.
+        Invoke(widget, "ToggleFace"); Invoke(widget, "ToggleFace");
+        Set(widget, "claudeReading", new ClaudeReading(now, new(13, now.AddHours(3)), new(18, now.AddDays(5))));
+        Save(widget, output, "claude-usage-public");
     }
 
     private static void CheckClaudeForecast(string? output)

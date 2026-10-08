@@ -4,23 +4,23 @@
 
 **A tiny Windows desktop widget for tracking Codex and Claude usage limits and reset times.**
 
-An independently maintained fork of [jspann21's CodexBar](https://github.com/jspann21/codex-bar), with usage forecasts, three compact faces, reset announcements and visibility diagnostics. The original author created CodexBar; MajorCommand maintains this edition. This project is not affiliated with OpenAI or Anthropic, or endorsed by the original author.
+An independently maintained fork of [jspann21's CodexBar](https://github.com/jspann21/codex-bar), with usage forecasts, compact usage faces, reset details, reset announcements and visibility diagnostics. The original author created CodexBar; MajorCommand maintains this edition. This project is not affiliated with OpenAI or Anthropic, or endorsed by the original author.
 
-**[Download the stable release](https://github.com/majorcommand/codex-bar/releases/tag/v1.2.0)** · [All releases](https://github.com/majorcommand/codex-bar/releases) · [Report an issue](https://github.com/majorcommand/codex-bar/issues) · [Changelog](CHANGELOG.md)
+**[Download the stable release](https://github.com/majorcommand/codex-bar/releases/tag/v1.3.0)** · [All releases](https://github.com/majorcommand/codex-bar/releases) · [Report an issue](https://github.com/majorcommand/codex-bar/issues) · [Changelog](CHANGELOG.md)
 
-The current MajorCommand release is **1.2.0**. This is the first stable release of the MajorCommand edition. Please include the version and circumstances when reporting a problem.
+The current MajorCommand release is **1.3.0**, with separate usage and reset pages for both providers. Please include the version and circumstances when reporting a problem.
 
 ![Codex & Claude Usage and Reset Tracker — MajorCommand Edition, with usage forecasts, reset countdowns and Claude allowances](assets/social-preview.png)
 
-The Codex pages automatically reuse your existing signed-in Codex session. The third page tracks Claude's five-hour and weekly allowance using your existing Claude Code login. The Codex main face shows remaining weekly capacity, average daily usage, and an estimated forecast. Click to switch to the reset-details face, with larger dates and times for the next weekly reset and every available banked reset expiry. It stays out of the way as a compact, draggable widget and continues updating from the Windows notification area.
+The Codex pages automatically reuse your existing signed-in Codex session. Claude's two pages use your existing Claude Code login. Click through **Codex usage → Codex resets → Claude usage → Claude resets**. Usage pages show remaining allowance and forecasts; reset pages show larger dates and countdowns, including available reset-credit expiry. It stays out of the way as a compact, draggable widget and continues updating from the Windows notification area.
 
 **Usage overview — Crown layout, illustrative data**
 
-![The tracker showing weekly capacity remaining, daily usage at the current rate, estimated remaining at reset and a yellow reset-announcement crown](assets/usage-overview-beta4.png)
+![The tracker showing weekly capacity remaining, daily usage at the current rate, estimated remaining at reset and a yellow reset-announcement crown](assets/usage-overview-1.3.png)
 
 **Reset details — Bottom layout, illustrative data**
 
-![The tracker showing weekly and banked reset dates with time remaining, plus a yellow reset-announcement row and Source link](assets/reset-details-beta4.png)
+![The tracker showing weekly and banked reset dates with time remaining, plus a yellow reset-announcement row and Source link](assets/reset-details-1.3.png)
 
 These examples demonstrate both announcement layouts. Choose **Reset announcements → Crown/Bottom** from the menu; the saved choice applies to both Codex faces.
 
@@ -37,11 +37,17 @@ The warning highlights only **Est. Remaining at Reset** when it displays zero or
 
 Click **.** to collapse toward the progress bar. Click the strip to restore the widget, or drag it to reposition.
 
-**Claude allowance — illustrative data**
+**Claude usage — illustrative data**
 
-![Claude five-hour and weekly allowance remaining with local reset details and a large estimated percentage left at reset](assets/claude-usage-beta6.png)
+![Claude five-hour and weekly allowance remaining beside estimated remaining at reset and a short forecast status](assets/claude-usage-1.3.png)
 
 The third face uses your Claude Code login. Account usage refreshes every five minutes; right-click and choose **Refresh Claude** for a manual check.
+
+**Claude resets — illustrative data**
+
+![Claude scheduled five-hour and weekly reset dates with countdowns, followed by available full reset credits and their separate expiry](assets/claude-resets-1.3.png)
+
+The fourth face keeps scheduled allowance resets separate from optional reset credits. **Open Claude usage ↗** opens Claude's settings for manual redemption. The widget never redeems credits automatically. Both compact usage pages return to their saved position after viewing taller details, including bottom alignment at the screen edge.
 
 ## Highlights
 
@@ -51,9 +57,9 @@ The third face uses your Claude Code login. Account usage refreshes every five m
 - Lists the exact expiration date and time of every available banked rate-limit reset
 - Changes from green to amber to red as capacity runs low
 - Highlights Est. Remaining at Reset in muted red with black text when average usage predicts running out before reset
-- Cycles through Codex usage, Codex reset details and Claude with a click; details grow vertically rather than shrinking the text
+- Cycles through Codex usage, Codex reset details, Claude usage and Claude reset details with a click; details grow vertically rather than shrinking the text
 - Keeps the main usage body at 290 × 114 logical pixels, with three prominent percentages, labels below them, reset countdown in the title and the progress bar below
-- Shows Claude's five-hour and weekly allowance remaining with reset times and five-minute account reads
+- Shows Claude's five-hour and weekly allowance remaining, a weekly forecast, separate scheduled reset times and optional reset credits, with five-minute account reads
 - Adds a 24-pixel reset-announcement strip on both Codex faces, with a saved Crown or Bottom layout and yellow text for announced or possible resets
 - Restores the compact face's position after viewing larger details or hover content, including at screen edges
 - Optionally expands the usage face vertically on hover for larger values and fuller labels, then returns to its compact size when the pointer leaves
@@ -69,9 +75,13 @@ The third face uses your Claude Code login. Account usage refreshes every five m
 
 ## Using the widget
 
-### Claude page
+### Claude pages
 
-The face cycle is **Codex usage → Codex reset details → Claude → Codex usage**. Click the body, press Space/Enter, or use **Switch face**. Claude shows five-hour and weekly percentages remaining, local reset dates, countdowns and the last successful update time. These allowances are shared with Claude web and desktop. Codex reset announcements stay on the two Codex faces; the tray number remains Codex weekly usage. Collapsing Claude shows its weekly allowance.
+The face cycle is **Codex usage → Codex reset details → Claude usage → Claude reset details → Codex usage**. Click the body, press Space/Enter, or use **Switch face**. Claude usage shows five-hour and weekly percentages remaining plus estimated remaining at the weekly reset. Claude reset details show local dates and countdowns for both scheduled windows, the last successful update and any available reset credits. These allowances are shared with Claude web and desktop. Codex reset announcements stay on the two Codex faces; the tray number remains Codex weekly usage. Collapsing either Claude page shows its weekly allowance, and restores the same page and position.
+
+Reset credits are optional account offers, distinct from scheduled allowance resets. The tracker displays their scope, remaining uses and expiry, with the nearest expiry first. Paused, future, expired and spent grants are excluded. A credit that cannot currently be redeemed says **not usable now**; missing redemption status says **availability unknown**. Unknown expiry and unavailable inventory remain explicit; a successful empty inventory says **No reset credits available**. Temporary failures mark retained inventory as last known and withhold live countdowns. **Open Claude usage ↗** opens Claude's settings page for manual redemption; the widget never redeems a credit.
+
+Following [CodexBar's reset-inventory integration](https://github.com/steipete/CodexBar/pull/4232), account reads request optional inventory with `cedar_ember=1` and the detected installed Claude Code version. If that version is unknown, ordinary usage still works. An unsupported optional query (400/403, excluding profile-scope denial) retries ordinary usage once. Authentication rejection, rate limits and server failures retain their existing recovery behavior. Grant identifiers and server labels are neither retained nor logged. This account interface is not a stable public API, so optional credit inventory may become unavailable even while ordinary usage continues.
 
 Sign in through Claude Code using `claude auth login --claudeai`, then choose **Refresh Claude**. Signing into the Claude desktop interface alone does not necessarily provide a valid Claude Code login. If Claude Code is bundled with Desktop and is not on PATH, run `auth login --claudeai` with that installation's `claude.exe`. Claude owns sign-in and credential writes. The widget asks native Claude Code to renew within five minutes of access-token expiry, after expiry, or after an authentication rejection, then rereads the credential and retries the usage request once. You only need another sign-in when Claude can no longer renew the saved login.
 
@@ -79,7 +89,7 @@ Following [steipete/CodexBar's Claude integration](https://github.com/steipete/C
 
 Account reads run every five minutes, independently of Codex refreshes. **Refresh Claude** and **Refresh now** can request an earlier read, with a minimum one-minute interval; server rate-limit delays also apply to manual refreshes. Concurrent reads are prevented. Usage requests have a fifteen-second deadline and bounded responses. Native renewal has a twenty-five-second deadline, closes standard input, disables MCP startup and Remote Control for that process, and discards bounded output. It runs a fixed `/status` probe in an isolated local folder without saving a conversation. Failed recovery is retried at the normal interval; manual refreshes cannot launch repeated probes within one minute. Desktop CLI discovery follows installed version directories so Desktop updates do not leave the widget pinned to an old executable. A permanently revoked login still requires sign-in; no PowerShell window needs to remain open.
 
-Missing allowances mean unavailable, never 100% remaining. When Claude supplies an explicit percentage but no reset timestamp, the percentage remains visible with reset time unavailable; this can occur just after a window resets. Temporary read failures preserve the last successful values, marked offline/last known; readings older than ten minutes are stale. Invalid credentials, denied access or changed credentials clear previous account values. Once a window's reset time passes, its percentage becomes unavailable until another successful read; the widget does not invent a refill. No Claude banked reset credits, special reset offers or notifications are inferred from these two windows.
+Missing allowances mean unavailable, never 100% remaining. When Claude supplies an explicit percentage but no reset timestamp, the percentage remains visible with reset time unavailable; this can occur just after a window resets. Temporary read failures preserve the last successful values, marked offline/last known; readings older than ten minutes are stale. Invalid credentials, denied access or changed credentials clear previous account values. Once a window's reset time passes, its percentage becomes unavailable until another successful read; the widget does not invent a refill. Reset credits come only from explicit inventory data, never from these two usage windows. Claude notifications are unchanged.
 
 The Claude page shows a large **Est. left at reset** percentage with a short status below the weekly allowance, using the same seven-day average and projection as Codex. It shows green **On track** alongside the estimated percentage left at reset, or red when the forecast rounds to 0% or predicts reaching the limit before reset. A fully used allowance says **Limit reached**. The calculation uses the last reading's capture time, so idle time cannot improve a cached forecast. Stale/offline readings, missing or passed reset times, invalid windows and the exact start of a week have no forecast. Estimates become available as soon as any cycle time has elapsed and can fluctuate sharply early in the week. This is the widget's projection of unchanged average usage, not Anthropic's own status message. The five-hour allowance remains independent.
 
@@ -186,7 +196,7 @@ Beta builds receive newer betas and stable releases; stable builds receive stabl
 
 ### Download a release
 
-Download from [MajorCommand's Releases page](https://github.com/majorcommand/codex-bar/releases/tag/v1.2.0):
+Download from [MajorCommand's Releases page](https://github.com/majorcommand/codex-bar/releases/tag/v1.3.0):
 
 - **Portable ZIP:** `CodexBar-MajorCommand-win-x64-portable.zip` includes the .NET runtime. Extract the entire ZIP into a permanent folder, then run `CodexBar.exe`. This is the simplest option if you do not already have .NET installed.
 - **Lightweight EXE:** `CodexBar.exe` requires the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/en-us/download/dotnet/10.0). The release also includes `LICENSE`, `CHANGELOG.md` and `SHA256SUMS.txt`.

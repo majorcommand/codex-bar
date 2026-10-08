@@ -155,5 +155,8 @@ internal static partial class Checks
         InitializeForm(form);
         Set(form, "showClaude", true); Set(form, "claudeReading", reading); Invoke(form, "UpdateFaceSize");
         Save(form, output, "claude-live-account");
+        Set(form, "showClaudeResets", true); Invoke(form, "UpdateFaceSize");
+        Save(form, output, "claude-live-resets");
+        Console.WriteLine($"Live Claude reset credits: inventory={(reading.Resets is null ? "unavailable" : "received")}; remaining={reading.Resets?.Available(DateTimeOffset.UtcNow).Sum(g => g.Remaining)}");
     }
 }

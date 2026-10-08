@@ -14,9 +14,22 @@ internal sealed record ClaudeWindow(double UsedPercentage, DateTimeOffset? Reset
 }
 
 internal sealed record ClaudeReading(DateTimeOffset ReceivedAt, ClaudeWindow? FiveHour,
-    ClaudeWindow? SevenDay, string? Error = null)
+    ClaudeWindow? SevenDay, string? Error = null, ClaudeResetInventory? Resets = null)
 {
     public bool Stale(DateTimeOffset now) => Error is not null || now - ReceivedAt >= TimeSpan.FromMinutes(10);
+}
+
+internal sealed record ClaudeResetGrant(int Remaining, DateTimeOffset? StartsAt, DateTimeOffset? ExpiresAt,
+    bool Paused, bool? UsableNow, string Kind)
+{
+    public bool Available(DateTimeOffset now) => !Paused && Remaining > 0 &&
+        (StartsAt is null || StartsAt <= now) && (ExpiresAt is null || ExpiresAt > now);
+}
+
+internal sealed record ClaudeResetInventory(IReadOnlyList<ClaudeResetGrant> Grants)
+{
+    public IReadOnlyList<ClaudeResetGrant> Available(DateTimeOffset now) => Grants.Where(g => g.Available(now))
+        .OrderBy(g => g.ExpiresAt ?? DateTimeOffset.MaxValue).ToArray();
 }
 
 internal sealed record ClaudeLogin(string AccessToken, DateTimeOffset? ExpiresAt, bool CanRenew);
@@ -30,6 +43,7 @@ internal sealed class ClaudeUsageClient : IDisposable
     private readonly Func<string> credentials;
     private readonly Func<DateTimeOffset> clock;
     private readonly Func<CancellationToken, Task<bool>> renewCredentials;
+    private readonly Func<string?> installedVersion;
     private readonly SemaphoreSlim gate = new(1, 1);
     private DateTimeOffset nextAutomaticRead;
     private DateTimeOffset notBefore;
@@ -37,13 +51,15 @@ internal sealed class ClaudeUsageClient : IDisposable
     public ClaudeReading? Current { get; private set; }
 
     public ClaudeUsageClient(HttpMessageHandler? handler = null, Func<string>? credentials = null,
-        Func<DateTimeOffset>? clock = null, Func<CancellationToken, Task<bool>>? renewCredentials = null)
+        Func<DateTimeOffset>? clock = null, Func<CancellationToken, Task<bool>>? renewCredentials = null,
+        Func<string?>? installedVersion = null)
     {
         http = new HttpClient(handler ?? new HttpClientHandler { AllowAutoRedirect = false, UseCookies = false });
         http.Timeout = TimeSpan.FromSeconds(15);
         http.DefaultRequestHeaders.UserAgent.ParseAdd("CodexBar-MajorCommand/" + EditionVersion.Current);
         this.credentials = credentials ?? ReadCredentials;
         this.clock = clock ?? (() => DateTimeOffset.UtcNow);
+        this.installedVersion = installedVersion ?? (credentials is null ? ClaudeCodeRenewal.InstalledVersion : () => null);
         // Injected credential fixtures must never launch the user's real Claude installation.
         this.renewCredentials = renewCredentials ?? (credentials is null ? ClaudeCodeRenewal.TryRenewAsync :
             _ => Task.FromResult(false));
@@ -105,7 +121,59 @@ internal sealed class ClaudeUsageClient : IDisposable
         var week = Property(root, "seven_day", required: false);
         if (session.ValueKind == JsonValueKind.Undefined && week.ValueKind == JsonValueKind.Undefined)
             throw new InvalidDataException();
-        return new(now, Window(session), Window(week));
+        return new(now, Window(session), Window(week), Resets: ResetInventory(root));
+    }
+
+    private static ClaudeResetInventory? ResetInventory(JsonElement root)
+    {
+        // Optional inventory must not invalidate independently valid usage windows.
+        // Never retain grant IDs/labels or guess a count from malformed inventory.
+        try
+        {
+            var status = Property(root, "cedar_ember", required: false);
+            if (status.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined) return null;
+            if (Property(status, "eligible").ValueKind != JsonValueKind.True) return null;
+            var grants = Property(status, "grants");
+            if (grants.ValueKind != JsonValueKind.Array || grants.GetArrayLength() > 200) return null;
+            var result = new List<ClaudeResetGrant>();
+            foreach (var grant in grants.EnumerateArray())
+            {
+                var remaining = Property(grant, "resets_left");
+                if (!remaining.TryGetInt32(out var count) || count is < 0 or > 1000) return null;
+                var paused = Property(grant, "paused");
+                if (paused.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) return null;
+                var usable = Property(grant, "usable_now", required: false);
+                if (usable.ValueKind is not (JsonValueKind.Undefined or JsonValueKind.Null or JsonValueKind.True or JsonValueKind.False)) return null;
+                var start = OptionalResetTime(Property(grant, "starts_at", required: false));
+                var end = OptionalResetTime(Property(grant, "ends_at", required: false));
+                if (start is not null && end is not null && end <= start) return null;
+                var clears = Property(grant, "clears");
+                if (clears.ValueKind != JsonValueKind.Array || clears.GetArrayLength() > 20) return null;
+                var names = clears.EnumerateArray().Select(value => value.GetString()).ToArray();
+                if (names.Any(name => string.IsNullOrWhiteSpace(name)) || names.Distinct().Count() != names.Length) return null;
+                var fiveHour = names.Contains("five_hour");
+                var week = names.Contains("seven_day");
+                var kind = fiveHour && week ? "Full reset" : fiveHour ? "5-hour reset" : week ? "Weekly reset" : "Other reset";
+                result.Add(new(count, start, end, paused.GetBoolean(), usable.ValueKind is JsonValueKind.True or JsonValueKind.False
+                    ? usable.GetBoolean() : null, kind));
+            }
+            if (result.Sum(g => g.Remaining) > 10000) return null;
+            return new(result);
+        }
+        catch (Exception ex) when (ex is InvalidDataException or InvalidOperationException or FormatException)
+        {
+            return null;
+        }
+    }
+
+    private static DateTimeOffset? OptionalResetTime(JsonElement value)
+    {
+        if (value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined) return null;
+        if (value.ValueKind != JsonValueKind.String) throw new InvalidDataException();
+        var text = value.GetString();
+        if (text is null || !(text.EndsWith('Z') || text.Length >= 6 && text[^3] == ':' && text[^6] is '+' or '-') ||
+            !DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed)) throw new InvalidDataException();
+        return parsed;
     }
 
     private static ClaudeWindow? Window(JsonElement value)
@@ -172,17 +240,31 @@ internal sealed class ClaudeUsageClient : IDisposable
                 return;
             }
             AdoptLogin(login);
-            for (var attempt = 0; attempt < 2; attempt++)
+            var version = installedVersion();
+            var includeInventory = version is not null && System.Text.RegularExpressions.Regex.IsMatch(version,
+                @"\A[0-9]+\.[0-9]+\.[0-9]+\z");
+            for (var attempt = 0; attempt < 3; attempt++)
             {
                 var token = login.AccessToken;
-                using var request = new HttpRequestMessage(HttpMethod.Get, UsageUrl);
+                using var request = new HttpRequestMessage(HttpMethod.Get, UsageUrl + (includeInventory ? "?cedar_ember=1" : ""));
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
                 request.Headers.Add("anthropic-beta", "oauth-2025-04-20");
+                request.Headers.CacheControl = new CacheControlHeaderValue { NoCache = true, NoStore = true };
+                if (includeInventory) request.Headers.UserAgent.ParseAdd($"claude-cli/{version} (external, cli)");
                 try
                 {
                     using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                     timeout.CancelAfter(TimeSpan.FromSeconds(15));
                     using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token).ConfigureAwait(false);
+                    if (includeInventory && response.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.Forbidden)
+                    {
+                        var rejection = await ReadBoundedAsync(response.Content, timeout.Token).ConfigureAwait(false);
+                        if (!Encoding.UTF8.GetString(rejection).Contains("user:profile", StringComparison.Ordinal))
+                        {
+                            includeInventory = false;
+                            continue;
+                        }
+                    }
                     if (response.StatusCode == HttpStatusCode.Unauthorized && !renewed && login.CanRenew)
                     {
                         renewed = true;
@@ -212,12 +294,8 @@ internal sealed class ClaudeUsageClient : IDisposable
                         Fail("Claude unavailable; will retry.", now);
                         return;
                     }
-                    if (response.Content.Headers.ContentLength > MaxBytes) throw new InvalidDataException();
-                    await using var stream = await response.Content.ReadAsStreamAsync(timeout.Token).ConfigureAwait(false);
-                    var buffer = new byte[MaxBytes + 1];
-                    var length = await stream.ReadAtLeastAsync(buffer, buffer.Length, throwOnEndOfStream: false, timeout.Token).ConfigureAwait(false);
-                    if (length > MaxBytes) throw new InvalidDataException();
-                    Current = Parse(Encoding.UTF8.GetString(buffer, 0, length), clock());
+                    var buffer = await ReadBoundedAsync(response.Content, timeout.Token).ConfigureAwait(false);
+                    Current = Parse(Encoding.UTF8.GetString(buffer), clock());
                     return;
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
@@ -228,8 +306,19 @@ internal sealed class ClaudeUsageClient : IDisposable
                     return;
                 }
             }
+            Fail("Claude read failed; will retry.", now);
         }
         finally { gate.Release(); }
+    }
+
+    private static async Task<byte[]> ReadBoundedAsync(HttpContent content, CancellationToken cancellationToken)
+    {
+        if (content.Headers.ContentLength > MaxBytes) throw new InvalidDataException();
+        await using var stream = await content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        var buffer = new byte[MaxBytes + 1];
+        var length = await stream.ReadAtLeastAsync(buffer, buffer.Length, throwOnEndOfStream: false, cancellationToken).ConfigureAwait(false);
+        if (length > MaxBytes) throw new InvalidDataException();
+        return buffer[..length];
     }
 
     private void AdoptLogin(ClaudeLogin login)
