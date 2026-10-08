@@ -25,7 +25,7 @@ internal static partial class Checks
         foreach (var timer in new[] { "refreshTimer", "topmostTimer", "positionSaveTimer", "hoverTimer", "claudeTimer" })
             ((System.Windows.Forms.Timer)Get(widget, timer)!).Stop();
         ((NotifyIcon)Get(widget, "trayIcon")!).Visible = false;
-        widget.CreateControl();
+        InitializeForm(widget);
         var overview = widget.Bounds;
         // Real mouse and keyboard handlers: Codex -> reset details -> Claude -> Codex.
         Click(widget, 40, 70);
@@ -74,7 +74,7 @@ internal static partial class Checks
         var now = DateTimeOffset.UtcNow;
         using var widget = new WidgetForm(new AppSettings { X = 100, Y = 100, AlwaysOnTop = false });
         ((NotifyIcon)Get(widget, "trayIcon")!).Visible = false;
-        widget.CreateControl();
+        InitializeForm(widget);
         Set(widget, "showClaude", true);
         Invoke(widget, "UpdateFaceSize");
         var reading = new ClaudeReading(now, new(99, now.AddHours(1)), new(18, now.AddDays(5)));

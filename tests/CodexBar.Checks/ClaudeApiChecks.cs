@@ -152,7 +152,7 @@ internal static partial class Checks
         Console.WriteLine($"Live Claude: five-hour remaining={reading!.FiveHour?.Remaining:0.#}%; weekly remaining={reading.SevenDay?.Remaining:0.#}%; checked={reading.ReceivedAt:O}");
         using var form = new WidgetForm(new AppSettings { AlwaysOnTop = false, X = 100, Y = 100 });
         ((NotifyIcon)Get(form, "trayIcon")!).Visible = false;
-        form.CreateControl();
+        InitializeForm(form);
         Set(form, "showClaude", true); Set(form, "claudeReading", reading); Invoke(form, "UpdateFaceSize");
         Save(form, output, "claude-live-account");
     }

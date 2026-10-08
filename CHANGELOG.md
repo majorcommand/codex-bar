@@ -1,6 +1,13 @@
 # Changelog
 
-All notable changes to CodexBar are documented here.
+All notable changes to the tracker (formerly CodexBar — MajorCommand Edition) are documented here.
+
+## [1.2.0] - 2026-10-08
+
+- Adds a GitHub social preview showing usage forecasts, reset countdowns and Claude allowances together.
+- Publishes the first stable MajorCommand release as **Codex & Claude Usage and Reset Tracker**, keeping both usage and reset tracking in the public name.
+- Updates public documentation, Windows display metadata, menus and notices while preserving the repository URL, download filenames, existing preferences, startup entry and single-instance identity.
+- Keeps the verified three-page usage, forecast, reset tracking and native Claude renewal features from beta.6. Corrects unshown-form fixture initialization so display-scaling checks run after monitor DPI is known.
 
 ## [1.2.0-beta.6] - 2026-10-07
 

@@ -21,7 +21,7 @@ internal static class Program
         using var mutex = new Mutex(true, "Local\\CodexBar.SingleInstance", out var firstInstance);
         if (!firstInstance)
         {
-            MessageBox.Show("CodexBar is already running in the notification area.", "CodexBar",
+            MessageBox.Show($"{AppBranding.DisplayName} is already running in the notification area.", AppBranding.DisplayName,
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }

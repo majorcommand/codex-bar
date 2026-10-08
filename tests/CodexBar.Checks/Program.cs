@@ -123,8 +123,10 @@ internal static partial class Checks
         Check("Topmost recovery runs independently of usage refresh", topmostTimer.Enabled && topmostTimer.Interval == 2_000);
         topmostTimer.Stop();
         ((NotifyIcon)Get(form, "trayIcon")!).Visible = false;
-        form.CreateControl();
+        InitializeForm(form);
         Check("Taskbar button stays off by default", !form.ShowInTaskbar);
+        Check("Public branding identifies both providers and both tracking functions", form.Text == AppBranding.WindowTitle &&
+            form.ContextMenuStrip!.Items.OfType<ToolStripMenuItem>().Any(item => item.Text == AppBranding.DisplayName));
         Check("Default preferences match requested hover, topmost and taskbar choices", new AppSettings() is
             { ExpandOnHover: false, AlwaysOnTop: true, ShowInTaskbar: false });
         Check("Overview preserves its 290 by 114 body plus announcement strip", form.ClientSize ==
@@ -624,10 +626,10 @@ internal static partial class Checks
             {
                 using var client = new ReleaseUpdateClient();
                 var installed = await client.ReadAsync(EditionVersion.Current);
-                var older = await client.ReadAsync(EditionVersion.Parse("1.2.0-beta.5")!);
+                var older = await client.ReadAsync(EditionVersion.Parse("1.2.0-beta.6")!);
                 return (installed, older);
             }).GetAwaiter().GetResult();
-            Check("Live GitHub releases do not offer an update to this beta", updates.installed is null);
+            Check("Live GitHub releases do not offer an update to this release", updates.installed is null);
             Check("Live GitHub release is discoverable by an earlier beta", updates.older?.Version == EditionVersion.Current);
         }
         Console.WriteLine($"PASS: {passed} checks. Rendered fixtures: {output ?? "not requested"}");
@@ -640,7 +642,7 @@ internal static partial class Checks
         using var handler = new ResetAnnouncementChecks.Handler((_, _) => Task.FromResult(unavailable
             ? new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.BadGateway)
             : ResetAnnouncementChecks.JsonResponse(newer
-                ? ReleaseUpdateChecks.Releases(ReleaseUpdateChecks.Release("v1.2.0-beta.7")) : "[]")));
+                ? ReleaseUpdateChecks.Releases(ReleaseUpdateChecks.Release("v1.2.1")) : "[]")));
         using var widget = new WidgetForm(new AppSettings { AlwaysOnTop = false },
             releaseUpdateClient: new ReleaseUpdateClient(handler));
         foreach (var name in new[] { "refreshTimer", "positionSaveTimer", "hoverTimer", "topmostTimer" })
@@ -652,7 +654,7 @@ internal static partial class Checks
         var download = (ToolStripMenuItem)widget.ContextMenuStrip.Items["availableUpdate"]!;
         var originalSize = widget.Size;
         ((Task)Invoke(widget, "RefreshUpdatesAsync", false)!).GetAwaiter().GetResult();
-        Check("Actual form exposes a new beta download without resizing", download.Available && download.Text!.Contains("1.2.0-beta.7") &&
+        Check("Actual form exposes a new stable download without resizing", download.Available && download.Text!.Contains("1.2.1") &&
             Get(widget, "availableUpdate") is ReleaseUpdate && widget.Size == originalSize);
         ((Task)Invoke(widget, "RefreshUpdatesAsync", true)!).GetAwaiter().GetResult();
         Check("Repeated manual clicks are throttled", handler.Calls == 1);
@@ -679,7 +681,7 @@ internal static partial class Checks
         foreach (var name in new[] { "refreshTimer", "positionSaveTimer", "hoverTimer", "topmostTimer" })
             ((System.Windows.Forms.Timer)Get(widget, name)!).Stop();
         ((NotifyIcon)Get(widget, "trayIcon")!).Visible = false;
-        widget.CreateControl();
+        InitializeForm(widget);
         var scale = widget.DeviceDpi / 96f;
         Check("Isolated forms do not automatically contact the reset tracker", handler.Calls == 0 &&
             !((System.Windows.Forms.Timer)Get(widget, "announcementTimer")!).Enabled);
@@ -862,7 +864,7 @@ internal static partial class Checks
             ((System.Windows.Forms.Timer)Get(widget, name)!).Stop();
         var tray = (NotifyIcon)Get(widget, "trayIcon")!;
         tray.Visible = false;
-        widget.CreateControl();
+        InitializeForm(widget);
         var scale = widget.DeviceDpi / 96f;
         var screen = Screen.FromControl(widget);
         SetSnapshot(widget, 26, 5, 2);
@@ -987,14 +989,19 @@ internal static partial class Checks
         Check("Off-screen collapse leaves the bar vertically reachable", screen.WorkingArea.Top <= widget.Top && widget.Bottom <= screen.WorkingArea.Bottom);
         Click(widget, 40, 4);
         Check("Restoring from a constrained bar preserves the off-screen position", widget.Location == offScreen);
+        // Startup clamps before the form acquires monitor DPI. Use a position valid
+        // for both the initial logical size and the scaled form; extreme dragging
+        // is exercised above independently of startup clamping.
+        var savedOffScreen = new Point(screen.Bounds.Left - 200, screen.Bounds.Top - 90);
         var storedPosition = JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(
-            new AppSettings { X = offScreen.X, Y = offScreen.Y, AlwaysOnTop = false }))!;
+            new AppSettings { X = savedOffScreen.X, Y = savedOffScreen.Y, AlwaysOnTop = false }))!;
         using (var reopened = new WidgetForm(storedPosition))
         {
             foreach (var name in new[] { "refreshTimer", "positionSaveTimer", "hoverTimer", "topmostTimer" })
                 ((System.Windows.Forms.Timer)Get(reopened, name)!).Stop();
             ((NotifyIcon)Get(reopened, "trayIcon")!).Visible = false;
-            Check("Reopening with saved off-screen coordinates preserves placement", reopened.Location == offScreen && !(bool)Get(reopened, "barOnly")!);
+            InitializeForm(reopened);
+            Check("Reopening with valid saved off-screen coordinates preserves placement", reopened.Location == savedOffScreen && !(bool)Get(reopened, "barOnly")!);
         }
         var recoveryArea = Screen.FromControl(widget).WorkingArea;
         Invoke(widget, "BringFullyOnScreen");
@@ -1039,6 +1046,12 @@ internal static partial class Checks
         if (!success) throw new InvalidOperationException("FAIL: " + label);
         passed++;
         Console.WriteLine("PASS: " + label);
+    }
+    private static void InitializeForm(WidgetForm form)
+    {
+        form.CreateControl();
+        // Unshown fixtures need layout after Windows assigns their monitor DPI.
+        Invoke(form, "UpdateFaceSize");
     }
     private static object? Get(object instance, string name) => typeof(WidgetForm)
         .GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(instance);

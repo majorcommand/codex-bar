@@ -209,7 +209,7 @@ internal static partial class Checks
         Check("Live native renewal path rereads a valid credential and retrieves account usage", nativeCalled && client.Current is { Error: null });
         using var form = new WidgetForm(new AppSettings { AlwaysOnTop = false, X = 100, Y = 100 });
         ((NotifyIcon)Get(form, "trayIcon")!).Visible = false;
-        form.CreateControl();
+        InitializeForm(form);
         Set(form, "showClaude", true); Set(form, "claudeReading", client.Current); Invoke(form, "UpdateFaceSize");
         Save(form, output, "claude-live-renewal");
     }

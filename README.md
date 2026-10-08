@@ -1,29 +1,33 @@
-# CodexBar — MajorCommand Edition
+# Codex & Claude Usage and Reset Tracker
+
+**MajorCommand Edition · Windows desktop widget**
 
 **A tiny Windows desktop widget for tracking Codex and Claude usage limits and reset times.**
 
 An independently maintained fork of [jspann21's CodexBar](https://github.com/jspann21/codex-bar), with usage forecasts, three compact faces, reset announcements and visibility diagnostics. The original author created CodexBar; MajorCommand maintains this edition. This project is not affiliated with OpenAI or Anthropic, or endorsed by the original author.
 
-**[Download the public beta](https://github.com/majorcommand/codex-bar/releases/tag/v1.2.0-beta.6)** · [All releases](https://github.com/majorcommand/codex-bar/releases) · [Report an issue](https://github.com/majorcommand/codex-bar/issues) · [Changelog](CHANGELOG.md)
+**[Download the stable release](https://github.com/majorcommand/codex-bar/releases/tag/v1.2.0)** · [All releases](https://github.com/majorcommand/codex-bar/releases) · [Report an issue](https://github.com/majorcommand/codex-bar/issues) · [Changelog](CHANGELOG.md)
 
-The current MajorCommand release is **1.2.0-beta.6**. The design has been tested locally, but long-running visibility behavior is still being monitored. Please include the version and circumstances when reporting a problem.
+The current MajorCommand release is **1.2.0**. This is the first stable release of the MajorCommand edition. Please include the version and circumstances when reporting a problem.
+
+![Codex & Claude Usage and Reset Tracker — MajorCommand Edition, with usage forecasts, reset countdowns and Claude allowances](assets/social-preview.png)
 
 The Codex pages automatically reuse your existing signed-in Codex session. The third page tracks Claude's five-hour and weekly allowance using your existing Claude Code login. The Codex main face shows remaining weekly capacity, average daily usage, and an estimated forecast. Click to switch to the reset-details face, with larger dates and times for the next weekly reset and every available banked reset expiry. It stays out of the way as a compact, draggable widget and continues updating from the Windows notification area.
 
 **Usage overview — Crown layout, illustrative data**
 
-![CodexBar showing weekly capacity remaining, daily usage at the current rate, estimated remaining at reset and a yellow reset-announcement crown](assets/usage-overview-beta4.png)
+![The tracker showing weekly capacity remaining, daily usage at the current rate, estimated remaining at reset and a yellow reset-announcement crown](assets/usage-overview-beta4.png)
 
 **Reset details — Bottom layout, illustrative data**
 
-![CodexBar showing weekly and banked reset dates with time remaining, plus a yellow reset-announcement row and Source link](assets/reset-details-beta4.png)
+![The tracker showing weekly and banked reset dates with time remaining, plus a yellow reset-announcement row and Source link](assets/reset-details-beta4.png)
 
 These examples demonstrate both announcement layouts. Choose **Reset announcements → Crown/Bottom** from the menu; the saved choice applies to both Codex faces.
 
 
 **Forecast warning — illustrative data**
 
-![CodexBar with a dark face and a negative five percent forecast highlighted in muted red with black text](assets/forecast-warning-beta4.png)
+![The tracker with a dark face and a negative five percent forecast highlighted in muted red with black text](assets/forecast-warning-beta4.png)
 
 The warning highlights only **Est. Remaining at Reset** when it displays zero or below. A negative value shows the projected shortfall, while actual weekly capacity stays separate.
 
@@ -71,7 +75,7 @@ The face cycle is **Codex usage → Codex reset details → Claude → Codex usa
 
 Sign in through Claude Code using `claude auth login --claudeai`, then choose **Refresh Claude**. Signing into the Claude desktop interface alone does not necessarily provide a valid Claude Code login. If Claude Code is bundled with Desktop and is not on PATH, run `auth login --claudeai` with that installation's `claude.exe`. Claude owns sign-in and credential writes. The widget asks native Claude Code to renew within five minutes of access-token expiry, after expiry, or after an authentication rejection, then rereads the credential and retries the usage request once. You only need another sign-in when Claude can no longer renew the saved login.
 
-Following [steipete/CodexBar's Claude integration](https://github.com/steipete/CodexBar/blob/main/docs/claude.md), the widget reads `claudeAiOauth` from `%USERPROFILE%\.claude\.credentials.json` (or `CLAUDE_CONFIG_DIR\.credentials.json` when set). It sends the existing profile-scoped access token only to the fixed HTTPS endpoint `https://api.anthropic.com/api/oauth/usage`, with redirects disabled. This account endpoint is not a stable public API and may change. CodexBar does not write credentials directly, copy them into its preferences, or persist Claude usage. Renewal runs through Claude Code, which can update its own credential file. No status-line setup is required, and Claude Code need not remain open.
+Following [steipete/CodexBar's Claude integration](https://github.com/steipete/CodexBar/blob/main/docs/claude.md), the widget reads `claudeAiOauth` from `%USERPROFILE%\.claude\.credentials.json` (or `CLAUDE_CONFIG_DIR\.credentials.json` when set). It sends the existing profile-scoped access token only to the fixed HTTPS endpoint `https://api.anthropic.com/api/oauth/usage`, with redirects disabled. This account endpoint is not a stable public API and may change. The tracker does not write credentials directly, copy them into its preferences, or persist Claude usage. Renewal runs through Claude Code, which can update its own credential file. No status-line setup is required, and Claude Code need not remain open.
 
 Account reads run every five minutes, independently of Codex refreshes. **Refresh Claude** and **Refresh now** can request an earlier read, with a minimum one-minute interval; server rate-limit delays also apply to manual refreshes. Concurrent reads are prevented. Usage requests have a fifteen-second deadline and bounded responses. Native renewal has a twenty-five-second deadline, closes standard input, disables MCP startup and Remote Control for that process, and discards bounded output. It runs a fixed `/status` probe in an isolated local folder without saving a conversation. Failed recovery is retried at the normal interval; manual refreshes cannot launch repeated probes within one minute. Desktop CLI discovery follows installed version directories so Desktop updates do not leave the widget pinned to an old executable. A permanently revoked login still requires sign-in; no PowerShell window needs to remain open.
 
@@ -93,13 +97,13 @@ The Claude page shows a large **Est. left at reset** percentage with a short sta
 - **Taskbar:** choose **Show in taskbar — On/Off** from the right-click menu. Off hides the running-window button while leaving the widget visible. The choice persists and applies when restoring the widget from the tray. New or missing settings default to Off; an explicit saved choice is retained. The notification icon and pinned launch shortcut remain available; a pinned shortcut remains visible as a launcher.
 - **Always on top:** while enabled and the widget is visible, a local check every two seconds repairs a lost topmost flag or an ordinary window covering it. Recovery preserves position, size and keyboard focus. It pauses during dragging, menus, modal dialogs and minimization, respects deliberate hiding and Off, and ignores other topmost windows and windows on inactive virtual desktops. This check makes no Codex requests.
 - **Start with Windows:** enabled automatically on the first launch of this build for the current Windows user, pointing to the executable you launched. Turning it Off in the menu is remembered and is not reversed on later launches. Startup failures show a tray warning. Keep the executable at its launch location while startup is enabled.
-- **Minimize to tray:** click `—` to hide both the widget and its taskbar button while CodexBar keeps updating in the notification area.
-- **Restore:** double-click the CodexBar notification icon, or choose **Show widget** from its menu.
+- **Minimize to tray:** click `—` to hide both the widget and its taskbar button while the tracker keeps updating in the notification area.
+- **Restore:** double-click the tracker notification icon, or choose **Show widget** from its menu.
 - **Tray menu:** right-click either the widget or its notification icon.
-- **Close:** clicking `×` minimizes CodexBar to the tray so it can keep updating.
+- **Close:** clicking `×` minimizes the tracker to the tray so it can keep updating.
 - **Quit:** choose **Exit** from the tray menu.
 
-The percentage is the capacity still available. For example, if Codex reports 10% used, CodexBar displays **90% left**.
+The percentage is the capacity still available. For example, if Codex reports 10% used, the tracker displays **90% left**.
 
 ### Usage pace
 
@@ -119,7 +123,7 @@ Preferences persist between launches.
 
 | Setting | Options | Default | What it does |
 |---|---|---:|---|
-| Refresh interval | 5 sec, 15 sec, 30 sec, 1 min, 5 min | 15 sec | Controls how often CodexBar requests the live Codex account limit; Claude reads every five minutes. |
+| Refresh interval | 5 sec, 15 sec, 30 sec, 1 min, 5 min | 15 sec | Controls how often the tracker requests the live Codex account limit; Claude reads every five minutes. |
 | Transparency | 100%, 90%, 80%, 70%, 60%, 50% opaque | 90% | Adjusts the entire widget's opacity. |
 | Expand on hover | On / Off | Off | Expands the usage face vertically for larger labels while hovered. |
 | Reset announcements | Bottom / Crown | Bottom | Places the independent tracker's status on both Codex faces; the crown also supports dragging. |
@@ -139,15 +143,15 @@ Preferences are stored at:
 
 ## Notifications
 
-CodexBar can notify you by email when weekly capacity resets to fully available. Open **Usage notifications…** from the tray menu, enter a notification address and your mail provider's SMTP details, and CodexBar sends one message automatically when it observes the weekly usage return to zero.
+The tracker can notify you by email when weekly capacity resets to fully available. Open **Usage notifications…** from the tray menu, enter a notification address and your mail provider's SMTP details, and the tracker sends one message automatically when it observes the weekly usage return to zero.
 
-You may be able to receive the alert as a text by using an email-to-SMS or email-to-MMS address supplied by your mobile carrier. Ask your carrier or search its official support site for **email-to-text gateway** and your plan name. The address is often based on your full phone number and a carrier-specific domain, but formats and availability vary. Send a normal test email to the address first, then use **Send test alert** in CodexBar.
+You may be able to receive the alert as a text by using an email-to-SMS or email-to-MMS address supplied by your mobile carrier. Ask your carrier or search its official support site for **email-to-text gateway** and your plan name. The address is often based on your full phone number and a carrier-specific domain, but formats and availability vary. Send a normal test email to the address first, then use **Send test alert** in the tracker.
 
-For Gmail SMTP, use `smtp.gmail.com`, port `587`, enable SSL/TLS, and enter your full Gmail address as the SMTP user. Google requires 2-Step Verification before you can [create a 16-digit app password](https://support.google.com/mail/answer/185833?hl=en); use that app password in CodexBar instead of your normal Google password. The app-password option may be unavailable for some managed, security-key-only, or Advanced Protection accounts.
+For Gmail SMTP, use `smtp.gmail.com`, port `587`, enable SSL/TLS, and enter your full Gmail address as the SMTP user. Google requires 2-Step Verification before you can [create a 16-digit app password](https://support.google.com/mail/answer/185833?hl=en); use that app password in the tracker instead of your normal Google password. The app-password option may be unavailable for some managed, security-key-only, or Advanced Protection accounts.
 
 ## How it works
 
-CodexBar uses the authenticated Codex installation already on your computer:
+The tracker uses the authenticated Codex installation already on your computer:
 
 1. Starts Codex's local `app-server` in the background using the installed Codex executable.
 2. Calls the supported `account/rateLimits/read` method at the selected refresh interval. Codex owns authentication, token refresh, and the upstream request.
@@ -159,7 +163,7 @@ For Codex, this means the widget does not scrape the UI, automate a browser, rea
 
 ### Independent reset announcements
 
-Announcement data comes from [Codex Resets](https://codex-resets.com/), an independent tracker, using its free [public API](https://codex-resets.com/api/docs). CodexBar checks `GET /api/v1/status` on launch and every five minutes, independently of the account refresh interval. It uses conditional requests when an ETag is available, respects server retry delays and cancels requests on exit. No account information or Codex credentials are sent to the tracker.
+Announcement data comes from [Codex Resets](https://codex-resets.com/), an independent tracker, using its free [public API](https://codex-resets.com/api/docs). The tracker checks `GET /api/v1/status` on launch and every five minutes, independently of the account refresh interval. It uses conditional requests when an ETag is available, respects server retry delays and cancels requests on exit. No account information or Codex credentials are sent to the tracker.
 
 **Reset Announced** means the tracker reports an explicit announcement; the approximate countdown comes from its reported time. If that time passes, the label changes to **Reset Announced · pending**, rather than assuming a reset happened. A banked credit announcement is identified in the tooltip. **Possible reset** is the tracker's AI-classified forecast, with an estimated probability when supplied; it is not an official OpenAI commitment. Expired forecasts disappear. **No reset announced** means no active announcement or forecast is reported. Failures show **Reset info offline**, or **Stale · reset info** if previously retrieved data exists; data also becomes stale after ten minutes without a successful check.
 
@@ -174,7 +178,7 @@ Beta builds receive newer betas and stable releases; stable builds receive stabl
 ## Privacy and security
 
 - No Codex credentials, access tokens, or API keys are requested or stored.
-- Authenticated requests are delegated to the official local Codex app-server; CodexBar never handles the underlying token.
+- Authenticated requests are delegated to the official local Codex app-server; the tracker never handles the underlying token.
 - Only account-wide weekly limit fields are used; conversation content and local session files are never read.
 - If SMTP delivery is configured, its address, host, port, and user are stored in the local settings JSON. The SMTP password is protected with Windows Data Protection API for the current Windows user and is never written there as plaintext.
 
@@ -182,7 +186,7 @@ Beta builds receive newer betas and stable releases; stable builds receive stabl
 
 ### Download a release
 
-Download from [MajorCommand's Releases page](https://github.com/majorcommand/codex-bar/releases/tag/v1.2.0-beta.6):
+Download from [MajorCommand's Releases page](https://github.com/majorcommand/codex-bar/releases/tag/v1.2.0):
 
 - **Portable ZIP:** `CodexBar-MajorCommand-win-x64-portable.zip` includes the .NET runtime. Extract the entire ZIP into a permanent folder, then run `CodexBar.exe`. This is the simplest option if you do not already have .NET installed.
 - **Lightweight EXE:** `CodexBar.exe` requires the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/en-us/download/dotnet/10.0). The release also includes `LICENSE`, `CHANGELOG.md` and `SHA256SUMS.txt`.
@@ -193,7 +197,7 @@ These downloads target Windows 10/11 on x64. ARM64 builds can be produced from s
 
 To update, download/extract the new version, choose **Exit** from the old widget's tray menu, and replace the files in the same permanent folder. Launch the new EXE. If you move it to a different folder, turn **Start with Windows** Off and On to update the startup path. Settings remain in `%LOCALAPPDATA%\CodexBar\settings.json`.
 
-This edition shares CodexBar's existing settings, startup entry and single-instance guard. Exit another CodexBar copy before launching it. Do not run the original and this edition together.
+The public name was previously **CodexBar — MajorCommand Edition**. The GitHub repository remains `majorcommand/codex-bar`, and downloads remain `CodexBar.exe` and `CodexBar-MajorCommand-win-x64-portable.zip` so existing update checks keep working. This edition retains CodexBar's settings folder, startup entry and single-instance guard. Exit another CodexBar copy before launching it. Do not run the original and this edition together.
 
 Each release is built from its matching tag. GitHub's source archives provide the matching GPL source; the ZIP includes the GPL licence and original project credit in this README. Use `Get-FileHash .\CodexBar.exe -Algorithm SHA256` (or the ZIP filename) to compare a download with `SHA256SUMS.txt`.
 
@@ -232,7 +236,7 @@ For Windows on ARM:
 
 ### “Open Codex and sign in”
 
-Open Codex and sign in. CodexBar will reuse that authenticated session on its next refresh. The installed Codex version must support app-server account methods.
+Open Codex and sign in. The tracker will reuse that authenticated session on its next refresh. The installed Codex version must support app-server account methods.
 
 ### The number has not changed
 
@@ -240,7 +244,7 @@ Choose **Refresh now** to request the live limit immediately. If the widget says
 
 ### The widget disappeared
 
-Look for the CodexBar icon in the notification area, including the overflow menu, and double-click it. Only **Exit** fully closes the application.
+Look for the tracker icon in the notification area, including the overflow menu, and double-click it. Only **Exit** fully closes the application.
 
 This build records visibility diagnostics locally at `%LOCALAPPDATA%\CodexBar\visibility.log`, keeping one older file named `visibility.log.previous`. Each file is limited to approximately 256 KB. If the widget unexpectedly disappears, note the time and preserve both files soon afterward; restoring the widget from the tray is fine.
 
@@ -254,6 +258,7 @@ Install the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/en-us/downloa
 
 ```text
 CodexBar.csproj    Windows Forms project configuration
+AppBranding.cs     Public display name, separate from compatible internal identities
 WidgetForm.cs      Widget UI, tray menu, rendering, and refresh behavior
 WidgetForm.Claude.cs  Third-face rendering and account refresh
 ClaudeUsage.cs     Read-only Claude account usage client
@@ -292,10 +297,14 @@ Claude checks use isolated credentials and HTTP responses by default. To verify 
 
 Update checks also use isolated HTTP fixtures and exercise the actual menu without downloading files, opening a browser or contacting GitHub. Tests cover beta/stable ordering, invalid metadata, response limits, cancellation, timeouts, retry delays and recovery.
 
-After this beta is published, append `--live-release-check` to verify the public release through the real client, including detection from an earlier beta version. This makes credential-free, read-only GitHub requests.
+After this release is published, append `--live-release-check` to verify the public release through the real client, including detection from an earlier beta version. This makes credential-free, read-only GitHub requests.
+
+The checks use the application's PerMonitorV2 DPI mode and lay out unshown fixtures after Windows assigns their monitor DPI. To also check 100% logical scaling without changing Windows settings, pass `-p:ApplicationHighDpiMode=DpiUnaware` to `dotnet run`. Saved positions beyond the initially visible screen limits can be clamped during startup; **Bring fully on screen** remains available for recovery.
+
+The GitHub social preview is `assets/social-preview.png`, rebuilt on Windows with `powershell -File assets/Build-SocialPreview.ps1` from the documented illustrative screenshots. Upload it in the repository's **Settings → General → Social preview**.
 
 ## License
 
-CodexBar is licensed under the GNU General Public License, version 3 only (`GPL-3.0-only`). See [LICENSE](LICENSE) for the full license text.
+This tracker is licensed under the GNU General Public License, version 3 only (`GPL-3.0-only`). See [LICENSE](LICENSE) for the full license text.
 
 Original project: [jspann21/codex-bar](https://github.com/jspann21/codex-bar). MajorCommand Edition preserves the original project history and licence. You may modify and redistribute this edition under that licence; provide matching source and retain the required notices.

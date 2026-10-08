@@ -192,7 +192,7 @@ internal sealed partial class WidgetForm : Form
             }
             catch (Exception ex) { startupError = ex; }
         }
-        Text = "CodexBar — MajorCommand Edition";
+        Text = AppBranding.WindowTitle;
         FormBorderStyle = FormBorderStyle.None;
         ApplyTaskbarVisibility(true);
         StartPosition = FormStartPosition.Manual;
@@ -216,7 +216,7 @@ internal sealed partial class WidgetForm : Form
         trayIcon = new NotifyIcon
         {
             Icon = CreateUsageTrayIcon(trayNumber),
-            Text = "CodexBar — loading weekly usage",
+            Text = AppBranding.DisplayName + " — loading usage",
             Visible = true,
             ContextMenuStrip = BuildTrayMenu()
         };
@@ -261,7 +261,7 @@ internal sealed partial class WidgetForm : Form
             if (visibilityLog?.LastError is not null && !diagnosticWarningShown)
             {
                 diagnosticWarningShown = true;
-                trayIcon.ShowBalloonTip(4500, "CodexBar",
+                trayIcon.ShowBalloonTip(4500, AppBranding.DisplayName,
                     "Could not save the visibility log. Check access to the local CodexBar settings folder.", ToolTipIcon.Warning);
             }
             MaintainAlwaysOnTop(Visible, ContextMenuStrip?.Visible == true, NeedsTopmostRepair, ApplyAlwaysOnTopState);
@@ -856,7 +856,7 @@ internal sealed partial class WidgetForm : Form
         catch (Exception ex)
         {
             Trace.WriteLine($"CodexBar: could not open reset tracker: {ex.GetType().Name}");
-            trayIcon.ShowBalloonTip(3500, "CodexBar", "Could not open codex-resets.com in your browser.", ToolTipIcon.Warning);
+            trayIcon.ShowBalloonTip(3500, AppBranding.DisplayName, "Could not open codex-resets.com in your browser.", ToolTipIcon.Warning);
         }
     }
 
@@ -974,6 +974,7 @@ internal sealed partial class WidgetForm : Form
         {
             await Task.WhenAll(RefreshUsageAsync(), RefreshAnnouncementsAsync(), RefreshClaudeAsync(manual: true));
         });
+        menu.Items.Add(new ToolStripMenuItem(AppBranding.DisplayName) { Enabled = false });
         menu.Items.Add(new ToolStripMenuItem($"MajorCommand Edition · {editionVersion}") { Enabled = false });
         var downloadUpdate = new ToolStripMenuItem("Update available…") { Name = "availableUpdate", Visible = false };
         downloadUpdate.Click += (_, _) => OpenUpdatePage();
@@ -1113,7 +1114,7 @@ internal sealed partial class WidgetForm : Form
             var sent = await SendTestUsageAlertAsync();
             trayIcon.ShowBalloonTip(
                 sent ? 2500 : 4500,
-                "CodexBar",
+                AppBranding.DisplayName,
                 sent ? "Test usage alert triggered." : "Could not trigger test usage alert.",
                 sent ? ToolTipIcon.Info : ToolTipIcon.Warning);
         });
@@ -1127,7 +1128,7 @@ internal sealed partial class WidgetForm : Form
         if (updateRefreshing || exiting || Disposing || IsDisposed) return;
         if (manual && DateTimeOffset.UtcNow < nextManualUpdateCheck)
         {
-            if (!isolatedPreferences) trayIcon.ShowBalloonTip(2500, "CodexBar — MajorCommand Edition",
+            if (!isolatedPreferences) trayIcon.ShowBalloonTip(2500, AppBranding.WindowTitle,
                 "Please wait five minutes between update checks.", ToolTipIcon.Info);
             return;
         }
@@ -1150,11 +1151,11 @@ internal sealed partial class WidgetForm : Form
             if (update is not null && notifiedUpdate != update.Version.ToString())
             {
                 notifiedUpdate = update.Version.ToString();
-                if (!isolatedPreferences) trayIcon.ShowBalloonTip(5000, "CodexBar update available",
+                if (!isolatedPreferences) trayIcon.ShowBalloonTip(5000, AppBranding.DisplayName,
                     $"MajorCommand Edition {update.Version} is available. Right-click the widget or tray icon and choose Update available.", ToolTipIcon.Info);
             }
             else if (manual && update is null && !isolatedPreferences)
-                trayIcon.ShowBalloonTip(2500, "CodexBar — MajorCommand Edition", "You have the latest release for your update channel.", ToolTipIcon.Info);
+                trayIcon.ShowBalloonTip(2500, AppBranding.WindowTitle, "You have the latest release for your update channel.", ToolTipIcon.Info);
         }
         catch (OperationCanceledException) when (updateCancellation.IsCancellationRequested) { }
         catch (Exception ex)
@@ -1164,7 +1165,7 @@ internal sealed partial class WidgetForm : Form
             check.Text = "Check for updates — unavailable";
             check.ToolTipText = "Could not check GitHub. Try again later; previously found updates remain available.";
             Trace.WriteLine($"CodexBar: update check failed: {ex.GetType().Name}");
-            if (manual && !isolatedPreferences) trayIcon.ShowBalloonTip(3500, "CodexBar — MajorCommand Edition",
+            if (manual && !isolatedPreferences) trayIcon.ShowBalloonTip(3500, AppBranding.WindowTitle,
                 "Could not check for updates. Check your connection and try again later.", ToolTipIcon.Warning);
         }
         finally
@@ -1185,7 +1186,7 @@ internal sealed partial class WidgetForm : Form
         catch (Exception ex)
         {
             Trace.WriteLine($"CodexBar: could not open release page: {ex.GetType().Name}");
-            trayIcon.ShowBalloonTip(3500, "CodexBar — MajorCommand Edition",
+            trayIcon.ShowBalloonTip(3500, AppBranding.WindowTitle,
                 "Could not open the download page. Visit github.com/majorcommand/codex-bar/releases.", ToolTipIcon.Warning);
         }
     }
@@ -1193,7 +1194,7 @@ internal sealed partial class WidgetForm : Form
     private void ReportStartupError(Exception error)
     {
         Debug.WriteLine(error);
-        trayIcon.ShowBalloonTip(4500, "CodexBar",
+        trayIcon.ShowBalloonTip(4500, AppBranding.DisplayName,
             "Could not update Windows startup. Try Start with Windows from the right-click menu.",
             ToolTipIcon.Warning);
     }
@@ -1216,8 +1217,8 @@ internal sealed partial class WidgetForm : Form
             Location = new Point(12, 12),
             AutoSize = false,
             Size = new Size(510, 50),
-            Text = "When weekly capacity resets to 100% available, CodexBar can send one notification email to your configured address.\n" +
-                   "If SMTP fields are blank, CodexBar opens your default mail app with a prefilled draft instead.",
+            Text = "When weekly capacity resets to 100% available, the tracker can send one notification email to your configured address.\n" +
+                   "If SMTP fields are blank, the tracker opens your default mail app with a prefilled draft instead.",
             TextAlign = ContentAlignment.TopLeft
         };
         header.MaximumSize = new Size(510, 0);
@@ -1640,7 +1641,7 @@ internal sealed partial class WidgetForm : Form
         var sent = await SendUsageLimitEmailAsync(current);
         trayIcon.ShowBalloonTip(
             sent ? 2500 : 4500,
-            "CodexBar",
+            AppBranding.DisplayName,
             sent
                 ? "Weekly capacity reset to 100% available. The email notification was triggered."
                 : "Weekly capacity reset to 100% available, but the email notification could not be sent.",
@@ -1828,7 +1829,7 @@ internal sealed partial class WidgetForm : Form
         Hide();
         RecordVisibility("hide-completed", reason);
         ApplyTaskbarVisibility(false);
-        trayIcon.ShowBalloonTip(1500, "CodexBar", "Still updating in the notification area.", ToolTipIcon.Info);
+        trayIcon.ShowBalloonTip(1500, AppBranding.DisplayName, "Still updating in the notification area.", ToolTipIcon.Info);
     }
 
     private void OnFormClosing(object? sender, FormClosingEventArgs e)
