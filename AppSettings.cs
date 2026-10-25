@@ -12,6 +12,7 @@ internal sealed class AppSettings
     public bool AlwaysOnTop { get; set; } = true;
     public bool ShowInTaskbar { get; set; }
     public bool ExpandOnHover { get; set; }
+    public bool MiniStrip { get; set; }
     public AnnouncementPlacement ResetAnnouncementPlacement { get; set; } = AnnouncementPlacement.Bottom;
     public bool WindowsStartupInitialized { get; set; }
     public int RefreshSeconds { get; set; } = 15;

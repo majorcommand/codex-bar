@@ -23,9 +23,9 @@ internal sealed partial class WidgetForm
         catch (OperationCanceledException) { return; }
         if (exiting || IsDisposed || Disposing) return;
         claudeReading = claudeClient.Current;
-        if (showClaude)
+        if (showClaude || miniStrip)
         {
-            if (showClaudeResets) UpdateFaceSize();
+            if (showClaudeResets && !miniStrip) UpdateFaceSize();
             Invalidate();
         }
     }
@@ -110,7 +110,7 @@ internal sealed partial class WidgetForm
     private bool IsClaudeUsageLink(Point point)
     {
         var logical = LogicalPoint(point);
-        return !barOnly && showClaude && showClaudeResets && logical.X >= 20 && logical.X <= 190 &&
+        return !miniStrip && !barOnly && showClaude && showClaudeResets && logical.X >= 20 && logical.X <= 190 &&
             logical.Y >= LogicalHeight - 29 && logical.Y <= LogicalHeight - 12;
     }
 

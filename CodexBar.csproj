@@ -7,8 +7,8 @@
     <Nullable>enable</Nullable>
     <AssemblyName>CodexBar</AssemblyName>
     <RootNamespace>CodexBar</RootNamespace>
-    <Version>1.3.0</Version>
-    <FileVersion>1.3.0.0</FileVersion>
+    <Version>1.4.0</Version>
+    <FileVersion>1.4.0.0</FileVersion>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>assets\CodexBar.ico</ApplicationIcon>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
@@ -18,6 +18,10 @@
     <SelfContained>false</SelfContained>
     <DebugType>none</DebugType>
     <DebugSymbols>false</DebugSymbols>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(MiniStripPreview)' == 'true'">
+    <DefineConstants>$(DefineConstants);MINI_STRIP_PREVIEW</DefineConstants>
+    <Version>1.4.0-beta.1</Version>
   </PropertyGroup>
   <ItemGroup>
     <Compile Remove="tests\**\*.cs" />

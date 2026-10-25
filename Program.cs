@@ -18,7 +18,11 @@ internal static class Program
         }
         _ = SetCurrentProcessExplicitAppUserModelID("CodexBar.Desktop");
         ApplicationConfiguration.Initialize();
-        using var mutex = new Mutex(true, "Local\\CodexBar.SingleInstance", out var firstInstance);
+        var preview = args is ["--mini-strip-preview"];
+#if MINI_STRIP_PREVIEW
+        preview = true;
+#endif
+        using var mutex = new Mutex(true, preview ? "Local\\CodexBar.MiniStripPreview" : "Local\\CodexBar.SingleInstance", out var firstInstance);
         if (!firstInstance)
         {
             MessageBox.Show($"{AppBranding.DisplayName} is already running in the notification area.", AppBranding.DisplayName,
@@ -26,7 +30,10 @@ internal static class Program
             return;
         }
 
-        Application.Run(new WidgetForm());
+        Application.Run(preview ? new WidgetForm(new AppSettings
+        {
+            MiniStrip = true, Opacity = 1, ShowInTaskbar = true, NotifyOnUsageLimitReached = false
+        }, localPreview: true) : new WidgetForm());
         GC.KeepAlive(mutex);
     }
 }

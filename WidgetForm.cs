@@ -114,8 +114,8 @@ internal sealed partial class WidgetForm : Form
     // Drawing uses logical pixels so fonts and hit areas scale together with DPI.
     private float UiScale => DeviceDpi / 96f;
     private int LogicalWidth => (int)Math.Round(ClientSize.Width / UiScale);
-    private int ActiveAnnouncementHeight => showClaude ? 0 : AnnouncementHeight;
-    private bool CrownAnnouncements => !barOnly && !showClaude && settings.ResetAnnouncementPlacement == AnnouncementPlacement.Crown;
+    private int ActiveAnnouncementHeight => miniStrip || showClaude ? 0 : AnnouncementHeight;
+    private bool CrownAnnouncements => !miniStrip && !barOnly && !showClaude && settings.ResetAnnouncementPlacement == AnnouncementPlacement.Crown;
     private int ContentTop => CrownAnnouncements ? AnnouncementHeight : 0;
     private Rectangle ProgressTrack => new(16, barOnly ? 2 : showClaude ? 106 : hoverExpanded ? 110 : WidgetHeight - 15,
         WidgetWidth - 32, !barOnly && hoverExpanded ? 6 : 4);
@@ -172,7 +172,7 @@ internal sealed partial class WidgetForm : Form
 
     public WidgetForm(AppSettings? preferences = null, VisibilityLog? diagnostics = null,
         ResetAnnouncementClient? resetAnnouncementsClient = null, ReleaseUpdateClient? releaseUpdateClient = null,
-        ClaudeUsageClient? claudeUsageClient = null)
+        ClaudeUsageClient? claudeUsageClient = null, bool localPreview = false)
     {
         // Injected preferences keep isolated checks away from the user's log.
         visibilityLog = diagnostics ?? (preferences is null ? new VisibilityLog() : null);
@@ -188,11 +188,11 @@ internal sealed partial class WidgetForm : Form
         {
             try
             {
-                if (settings.ApplyStartupDefault(() => AppSettings.StartsWithWindows = true)) settings.Save();
+                if (settings.ApplyStartupDefault(() => AppSettings.StartsWithWindows = true)) SavePreferences();
             }
             catch (Exception ex) { startupError = ex; }
         }
-        Text = AppBranding.WindowTitle;
+        Text = AppBranding.WindowTitle + (localPreview ? " · LOCAL PREVIEW" : "");
         FormBorderStyle = FormBorderStyle.None;
         ApplyTaskbarVisibility(true);
         StartPosition = FormStartPosition.Manual;
@@ -233,7 +233,7 @@ internal sealed partial class WidgetForm : Form
 
         claudeTimer = new System.Windows.Forms.Timer { Interval = 5_000 };
         claudeTimer.Tick += async (_, _) => await RefreshClaudeAsync();
-        if (!isolatedPreferences)
+        if (!isolatedPreferences || localPreview)
         {
             claudeTimer.Start();
         }
@@ -274,10 +274,17 @@ internal sealed partial class WidgetForm : Form
         updateTimer = new System.Windows.Forms.Timer { Interval = 86_400_000 };
         updateTimer.Tick += async (_, _) => await RefreshUpdatesAsync();
         if (!isolatedPreferences) updateTimer.Start();
-        Shown += async (_, _) => await Task.WhenAll(RefreshUsageAsync(), RefreshAnnouncementsAsync(), RefreshUpdatesAsync(), RefreshClaudeAsync());
+        Shown += async (_, _) =>
+        {
+            if (localPreview) await Task.WhenAll(RefreshUsageAsync(), RefreshClaudeAsync());
+            else await Task.WhenAll(RefreshUsageAsync(), RefreshAnnouncementsAsync(), RefreshUpdatesAsync(), RefreshClaudeAsync());
+        };
         LocationChanged += (_, _) => QueuePositionSave();
         FormClosing += OnFormClosing;
         KeyPreview = true;
+        miniStripTimer = new System.Windows.Forms.Timer { Interval = 1_000 };
+        miniStripTimer.Tick += (_, _) => { if (miniStrip) Invalidate(); };
+        if (settings.MiniStrip) SetMiniStrip(true);
         RecordVisibility("session-start", $"build={typeof(WidgetForm).Assembly.ManifestModule.ModuleVersionId}");
     }
 
@@ -395,6 +402,11 @@ internal sealed partial class WidgetForm : Form
         g.SmoothingMode = SmoothingMode.AntiAlias;
         // A prior tray-icon text draw can make GDI+ SystemDefault render jagged text.
         g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+        if (miniStrip)
+        {
+            DrawMiniStrip(g);
+            return;
+        }
         if (barOnly)
         {
             DrawBarOnly(g);
@@ -461,13 +473,13 @@ internal sealed partial class WidgetForm : Form
         UpdateHoverTarget(false);
     }
 
-    private bool IsHoverBody(Point point) => !barOnly && IsInsideWidget(point) &&
+    private bool IsHoverBody(Point point) => !miniStrip && !barOnly && IsInsideWidget(point) &&
         LogicalPoint(point).Y > TitleHeight && LogicalPoint(point).Y < LogicalHeight;
 
     private bool IsInsideWidget(Point point) => ClientRectangle.Contains(point) &&
         (Region?.IsVisible(point) ?? true);
 
-    private bool IsAnnouncement(Point point) => !barOnly && !showClaude && IsInsideWidget(point) &&
+    private bool IsAnnouncement(Point point) => !miniStrip && !barOnly && !showClaude && IsInsideWidget(point) &&
         AnnouncementBounds.Contains(point.X / UiScale, point.Y / UiScale);
 
     private bool IsAnnouncementSource(Point point) => IsAnnouncement(point) &&
@@ -493,7 +505,7 @@ internal sealed partial class WidgetForm : Form
     private void QueueHover(bool expand)
     {
         hoverTimer.Stop();
-        if (!settings.ExpandOnHover || showResetDetails || showClaude || barOnly) return;
+        if (!settings.ExpandOnHover || showResetDetails || showClaude || barOnly || miniStrip) return;
         if (expand && (!pointerInHoverBody || suppressHoverUntilReentry)) return;
         expandOnNextHoverTick = expand;
         hoverTimer.Interval = expand ? 350 : 450;
@@ -502,7 +514,7 @@ internal sealed partial class WidgetForm : Form
 
     private void ProcessHoverTick(bool pointerInBody, bool menuVisible)
     {
-        if (!settings.ExpandOnHover || showResetDetails || showClaude || barOnly)
+        if (!settings.ExpandOnHover || showResetDetails || showClaude || barOnly || miniStrip)
         {
             CancelHover();
             return;
@@ -557,7 +569,7 @@ internal sealed partial class WidgetForm : Form
             UpdateHoverTarget(IsHoverBody(e.Location));
             SetAnnouncementTip(IsAnnouncement(e.Location));
             var point = LogicalPoint(e.Location);
-            Cursor = barOnly ? Cursors.SizeAll : IsAnnouncementSource(e.Location) || IsClaudeUsageLink(e.Location) ? Cursors.Hand
+            Cursor = miniStrip || barOnly ? Cursors.SizeAll : IsAnnouncementSource(e.Location) || IsClaudeUsageLink(e.Location) ? Cursors.Hand
                 : CrownAnnouncements && point.Y < 0 ||
                     point.Y >= 0 && point.Y <= TitleHeight && point.X < LogicalWidth - 90
                     ? Cursors.SizeAll : Cursors.Default;
@@ -591,6 +603,9 @@ internal sealed partial class WidgetForm : Form
             if (barRestoreLocation is { } restore)
                 barRestoreLocation = new Point(restore.X + Location.X - previous.X,
                     restore.Y + Location.Y - previous.Y);
+            if (miniRestoreLocation is { } miniRestore)
+                miniRestoreLocation = new Point(miniRestore.X + Location.X - previous.X,
+                    miniRestore.Y + Location.Y - previous.Y);
         }
     }
 
@@ -627,6 +642,11 @@ internal sealed partial class WidgetForm : Form
                 if (control == 0) SetBarOnly(true);
                 else HideToTray(control == 2 ? "close-button" : "minimize-button");
             }
+            return;
+        }
+        if (miniStrip)
+        {
+            SetMiniStrip(false);
             return;
         }
         if (barOnly)
@@ -667,7 +687,8 @@ internal sealed partial class WidgetForm : Form
         base.OnKeyDown(e);
         if (e.KeyCode is Keys.Space or Keys.Enter)
         {
-            if (barOnly) SetBarOnly(false);
+            if (miniStrip) SetMiniStrip(false);
+            else if (barOnly) SetBarOnly(false);
             else ToggleFace();
             e.Handled = e.SuppressKeyPress = true;
         }
@@ -676,7 +697,7 @@ internal sealed partial class WidgetForm : Form
     protected override void OnMouseWheel(MouseEventArgs e)
     {
         base.OnMouseWheel(e);
-        if (barOnly) return;
+        if (barOnly || miniStrip) return;
         if (showClaudeResets)
         {
             firstVisibleClaudeReset = Math.Clamp(firstVisibleClaudeReset - Math.Sign(e.Delta), 0,
@@ -692,6 +713,7 @@ internal sealed partial class WidgetForm : Form
 
     private void ToggleFace()
     {
+        if (miniStrip) { SetMiniStrip(false); return; }
         if (barOnly) SetBarOnly(false);
         CancelHover();
         var returningToClaudeUsage = showResetDetails;
@@ -721,18 +743,19 @@ internal sealed partial class WidgetForm : Form
             ? Math.Max(DetailsMinimumHeight, ResetRowsTop + DetailsFooterSpace +
                 (snapshot?.ResetExpirations.Count ?? 0) * ResetRowHeight)
             : hoverExpanded ? ExpandedUsageHeight : WidgetHeight;
-        ClientSize = new Size((int)Math.Round(WidgetWidth * UiScale),
-            barOnly ? (int)Math.Round(BarHeight * UiScale)
+        ClientSize = new Size((int)Math.Round((miniStrip ? MiniStripWidth : WidgetWidth) * UiScale),
+            miniStrip ? (int)Math.Round(MiniStripHeight * UiScale) : barOnly ? (int)Math.Round(BarHeight * UiScale)
                 : Math.Min((int)Math.Round((wantedHeight + ActiveAnnouncementHeight) * UiScale), screen.WorkingArea.Height));
         UpdateWidgetRegion();
         // Keep a deliberately dragged larger face in place during refreshes.
         // Only shrinking back to compact restores its separately retained origin.
-        var desired = barOnly || showResetDetails || showClaude || hoverExpanded ? Location : compactAnchor ?? Location;
+        var desired = miniStrip || barOnly || showResetDetails || showClaude || hoverExpanded ? Location : compactAnchor ?? Location;
         Location = !barOnly && wasFullyVisible ? FullyVisibleLocation(desired, Size, screen.WorkingArea) : KeepVisible(desired);
     }
 
     private void SetBarOnly(bool collapsed)
     {
+        if (collapsed && miniStrip) SetMiniStrip(false);
         if (barOnly == collapsed) return;
         if (collapsed)
         {
@@ -765,8 +788,12 @@ internal sealed partial class WidgetForm : Form
     {
         SetBarOnly(false);
         CancelHover();
+        var previous = Location;
         Location = FullyVisibleLocation(Location, Size, Screen.FromControl(this).WorkingArea);
-        if (compactAnchor is not null) compactAnchor = Location;
+        if (compactAnchor is { } anchor) compactAnchor = miniStrip
+            ? new Point(anchor.X + Left - previous.X, anchor.Y + Top - previous.Y) : Location;
+        if (miniRestoreLocation is { } restore)
+            miniRestoreLocation = new Point(restore.X + Left - previous.X, restore.Y + Top - previous.Y);
         RecordVisibility("bring-fully-on-screen");
     }
 
@@ -810,14 +837,15 @@ internal sealed partial class WidgetForm : Form
         settings.ResetAnnouncementPlacement = placement;
         var newTop = placement == AnnouncementPlacement.Crown ? AnnouncementHeight : 0;
         var delta = (int)Math.Round((oldTop - newTop) * UiScale);
-        if (!barOnly && !showClaude) Location = new Point(Left, Top + delta);
+        if (!miniStrip && !barOnly && !showClaude) Location = new Point(Left, Top + delta);
         else if (barOnly && !showClaude && barRestoreLocation is { } restore) barRestoreLocation = new Point(restore.X, restore.Y + delta);
+        else if (miniStrip && !showClaude && miniRestoreLocation is { } miniRestore) miniRestoreLocation = new Point(miniRestore.X, miniRestore.Y + delta);
         if (compactAnchor is { } anchor) compactAnchor = new Point(anchor.X, anchor.Y + delta);
         UpdateFaceSize();
         if (!barOnly && wasFullyVisible) Location = FullyVisibleLocation(Location, Size, area);
         pointerInHoverBody = false;
         Invalidate();
-        if (!isolatedPreferences) settings.Save();
+        SavePreferences();
     }
 
     private bool AnnouncementStale(DateTimeOffset now) => announcementFailed ||
@@ -858,7 +886,8 @@ internal sealed partial class WidgetForm : Form
 
     private void SetAnnouncementTip(bool show)
     {
-        var text = showClaude ? "Shared Claude account limits · checked every five minutes. Right-click to refresh."
+        announcementTip.Active = !miniStrip;
+        var text = miniStrip ? "" : showClaude ? "Shared Claude account limits · checked every five minutes. Right-click to refresh."
             : barOnly ? "Click to restore · drag to move" + (!liveConnected ? " · usage offline" : "")
             : show ? "Data from Codex Resets · " + ResetAnnouncementClient.SourceUrl + "\n" +
             (announcements?.Details(DateTimeOffset.Now) ?? "Checking the independent reset tracker.") +
@@ -986,6 +1015,9 @@ internal sealed partial class WidgetForm : Form
     {
         var menu = new ContextMenuStrip { ShowImageMargin = false };
         menu.Items.Add("Show widget", null, (_, _) => ShowWidget());
+        var mini = new ToolStripMenuItem("Mini strip") { Name = "miniStrip", Checked = miniStrip };
+        mini.Click += (_, _) => SetMiniStrip(!miniStrip);
+        menu.Items.Add(mini);
         menu.Items.Add("Collapse to progress bar", null, (_, _) => SetBarOnly(true));
         menu.Items.Add("Bring fully on screen", null, (_, _) => { BringFullyOnScreen(); ShowWidget(); });
         menu.Items.Add("Switch face", null, (_, _) => ToggleFace());
@@ -1041,7 +1073,7 @@ internal sealed partial class WidgetForm : Form
                 refreshTimer.Interval = option.Seconds * 1_000;
                 foreach (ToolStripMenuItem peer in refreshInterval.DropDownItems)
                     peer.Checked = peer == item;
-                settings.Save();
+                SavePreferences();
             };
             refreshInterval.DropDownItems.Add(item);
         }
@@ -1057,7 +1089,7 @@ internal sealed partial class WidgetForm : Form
                 settings.Opacity = percent / 100d;
                 Opacity = settings.Opacity;
                 foreach (ToolStripMenuItem peer in opacity.DropDownItems) peer.Checked = peer == item;
-                settings.Save();
+                SavePreferences();
             };
             opacity.DropDownItems.Add(item);
         }
@@ -1074,7 +1106,7 @@ internal sealed partial class WidgetForm : Form
             if (hover.Checked) QueueHover(true);
             else CancelHover();
             hover.Text = $"Expand on hover — {(hover.Checked ? "On" : "Off")}";
-            settings.Save();
+            SavePreferences();
         };
         menu.Items.Add(hover);
 
@@ -1088,7 +1120,7 @@ internal sealed partial class WidgetForm : Form
             settings.AlwaysOnTop = topmost.Checked;
             ApplyAlwaysOnTopState();
             topmost.Text = $"Always on top — {(topmost.Checked ? "On" : "Off")}";
-            settings.Save();
+            SavePreferences();
         };
         menu.Items.Add(topmost);
 
@@ -1102,14 +1134,14 @@ internal sealed partial class WidgetForm : Form
         {
             settings.ShowInTaskbar = taskbar.Checked;
             ApplyTaskbarVisibility(Visible);
-            taskbar.Text = $"Show in taskbar — {(taskbar.Checked ? "On" : "Off")}";
-            settings.Save();
+            SavePreferences();
         };
         menu.Items.Add(taskbar);
 
         var startsWithWindows = AppSettings.StartsWithWindows;
         var startup = new ToolStripMenuItem($"Start with Windows — {(startsWithWindows ? "On" : "Off")}")
         {
+            Enabled = !isolatedPreferences,
             CheckOnClick = true,
             Checked = startsWithWindows
         };
@@ -1119,7 +1151,7 @@ internal sealed partial class WidgetForm : Form
             {
                 AppSettings.StartsWithWindows = startup.Checked;
                 settings.WindowsStartupInitialized = true;
-                settings.Save();
+                SavePreferences();
             }
             catch (Exception ex)
             {
@@ -1129,7 +1161,7 @@ internal sealed partial class WidgetForm : Form
             startup.Text = $"Start with Windows — {(startup.Checked ? "On" : "Off")}";
         };
         menu.Items.Add(startup);
-        menu.Items.Add("Usage notifications…", null, (_, _) => ShowNotificationSettings());
+        menu.Items.Add("Usage notifications…", null, (_, _) => ShowNotificationSettings()).Enabled = !isolatedPreferences;
         menu.Items.Add("Send test alert", null, async (_, _) =>
         {
             var sent = await SendTestUsageAlertAsync();
@@ -1138,7 +1170,7 @@ internal sealed partial class WidgetForm : Form
                 AppBranding.DisplayName,
                 sent ? "Test usage alert triggered." : "Could not trigger test usage alert.",
                 sent ? ToolTipIcon.Info : ToolTipIcon.Warning);
-        });
+        }).Enabled = !isolatedPreferences;
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Exit", null, (_, _) => { RecordVisibility("exit-request", "tray-menu"); exiting = true; Close(); });
         return menu;
@@ -1381,7 +1413,7 @@ internal sealed partial class WidgetForm : Form
             settings.SmtpUser = NormalizeOrNull(userInput.Text);
             settings.SmtpPassword = NormalizeOrNull(passwordInput.Text);
             settings.SmtpFromAddress = fromAddress?.Address;
-            settings.Save();
+            SavePreferences();
             dialog.DialogResult = DialogResult.OK;
             dialog.Close();
         };
@@ -1411,7 +1443,7 @@ internal sealed partial class WidgetForm : Form
         g.DrawLine(controlPen, LogicalWidth - 12, 13, LogicalWidth - 20, 21);
     }
 
-    private int WindowControlAt(PointF point) => !barOnly && point.Y >= 0 && point.Y <= TitleHeight &&
+    private int WindowControlAt(PointF point) => !miniStrip && !barOnly && point.Y >= 0 && point.Y <= TitleHeight &&
         point.X >= LogicalWidth - 90 && point.X < LogicalWidth
         ? (int)((point.X - (LogicalWidth - 90)) / 30) : -1;
 
@@ -1649,7 +1681,7 @@ internal sealed partial class WidgetForm : Form
         if (!settings.NotifyOnUsageLimitReached || !becameFullyAvailable || alreadyNotifiedForWindow)
         {
             if (observationChanged)
-                settings.Save();
+                SavePreferences();
             return;
         }
 
@@ -1657,7 +1689,7 @@ internal sealed partial class WidgetForm : Form
         // weekly schedule. The usage transition above is the event; the reset time
         // is retained only as a narrow guard against duplicate readings.
         settings.LastUsageLimitNotificationResetAt = current.ResetsAt;
-        settings.Save();
+        SavePreferences();
 
         var sent = await SendUsageLimitEmailAsync(current);
         trayIcon.ShowBalloonTip(
@@ -1774,7 +1806,9 @@ internal sealed partial class WidgetForm : Form
 
     private void ApplyTaskbarVisibility(bool widgetVisible)
     {
-        ShowInTaskbar = widgetVisible && settings.ShowInTaskbar;
+        ShowInTaskbar = widgetVisible && settings.ShowInTaskbar && !miniStrip;
+        if (trayIcon?.ContextMenuStrip?.Items["showInTaskbar"] is ToolStripMenuItem item)
+            item.Text = $"Show {(miniStrip ? "full widget " : "")}in taskbar — {(settings.ShowInTaskbar ? "On" : "Off")}";
     }
 
     private void ApplyAlwaysOnTopState()
@@ -1888,16 +1922,16 @@ internal sealed partial class WidgetForm : Form
     private void SavePositionNow()
     {
         if (isolatedPreferences || WindowState != FormWindowState.Normal) return;
-        var savedLocation = compactAnchor ?? barRestoreLocation ?? Location;
+        var savedLocation = compactAnchor ?? barRestoreLocation ?? miniRestoreLocation ?? Location;
         settings.X = savedLocation.X;
         settings.Y = savedLocation.Y;
-        settings.Save();
+        SavePreferences();
     }
 
     private Point KeepVisible(Point desired)
     {
         var screen = Screen.FromRectangle(new Rectangle(desired, Size));
-        return PartiallyVisibleLocation(desired, Size, screen.Bounds, screen.WorkingArea, barOnly);
+        return PartiallyVisibleLocation(desired, Size, screen.Bounds, screen.WorkingArea, barOnly || miniStrip);
     }
 
     private static Point PartiallyVisibleLocation(Point desired, Size size, Rectangle screen, Rectangle workArea, bool bar)
@@ -1932,6 +1966,8 @@ internal sealed partial class WidgetForm : Form
             claudeClient.Dispose();
             claudeCancellation.Dispose();
             refreshTimer.Dispose();
+            miniStripTimer.Dispose();
+            miniValueFont.Dispose();
             positionSaveTimer.Dispose();
             hoverTimer.Dispose();
             topmostTimer.Dispose();

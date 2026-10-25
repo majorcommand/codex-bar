@@ -6,13 +6,14 @@
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <Version>1.3.0</Version>
+    <Version>1.4.0</Version>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../../AppBranding.cs" Link="AppBranding.cs" />
     <Compile Include="../../ClaudeUsage.cs" Link="ClaudeUsage.cs" />
     <Compile Include="../../ClaudeCodeRenewal.cs" Link="ClaudeCodeRenewal.cs" />
     <Compile Include="../../WidgetForm.Claude.cs" Link="WidgetForm.Claude.cs" />
+    <Compile Include="../../WidgetForm.MiniStrip.cs" Link="WidgetForm.MiniStrip.cs" />
     <Compile Include="../../UsagePace.cs" Link="UsagePace.cs" />
     <Compile Include="../../VisibilityLog.cs" Link="VisibilityLog.cs" />
     <Compile Include="../../ResetAnnouncements.cs" Link="ResetAnnouncements.cs" />

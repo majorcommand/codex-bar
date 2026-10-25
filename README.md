@@ -6,9 +6,9 @@
 
 An independently maintained fork of [jspann21's CodexBar](https://github.com/jspann21/codex-bar), with usage forecasts, compact usage faces, reset details, reset announcements and visibility diagnostics. The original author created CodexBar; MajorCommand maintains this edition. This project is not affiliated with OpenAI or Anthropic, or endorsed by the original author.
 
-**[Download the stable release](https://github.com/majorcommand/codex-bar/releases/tag/v1.3.0)** · [All releases](https://github.com/majorcommand/codex-bar/releases) · [Report an issue](https://github.com/majorcommand/codex-bar/issues) · [Changelog](CHANGELOG.md)
+**[Download the stable release](https://github.com/majorcommand/codex-bar/releases/tag/v1.4.0)** · [All releases](https://github.com/majorcommand/codex-bar/releases) · [Report an issue](https://github.com/majorcommand/codex-bar/issues) · [Changelog](CHANGELOG.md)
 
-The current MajorCommand release is **1.3.0**, with separate usage and reset pages for both providers. Please include the version and circumstances when reporting a problem.
+The current MajorCommand release is **1.4.0**, adding a quiet mini strip alongside the four usage and reset pages. Please include the version and circumstances when reporting a problem.
 
 ![Codex & Claude Usage and Reset Tracker — MajorCommand Edition, with usage forecasts, reset countdowns and Claude allowances](assets/social-preview.png)
 
@@ -37,6 +37,19 @@ The warning highlights only **Est. Remaining at Reset** when it displays zero or
 
 Click **.** to collapse toward the progress bar. Click the strip to restore the widget, or drag it to reposition.
 
+**Mini usage strip — illustrative data**
+
+![Compact strip with Codex weekly, Claude five-hour and Claude weekly allowances and their separate reset countdowns](assets/mini-strip-1.4.png)
+
+Choose **Mini strip** from the right-click menu for a 472 × 40 logical-pixel row:
+**Codex weekly remaining · reset countdown | Claude five-hour remaining · reset countdown | Claude weekly remaining · reset countdown**.
+Percentages show remaining allowance. Weekly countdowns use days, switching to hours and minutes during the last day.
+Drag anywhere to move it; click or press Enter/Space to return to the same full page. Mini mode has no hover tooltip or expand icon.
+Its taskbar button is hidden while the notification-area icon and menu remain available. Restoring the full widget follows your saved taskbar preference.
+The strip updates its countdowns locally every second without making extra account requests.
+An asterisk marks last-known offline/stale values; their countdowns are withheld. Missing or expired readings show a dash until refreshed.
+The four full pages and original progress-only strip remain available. Your mini-mode choice is saved between launches.
+
 **Claude usage — illustrative data**
 
 ![Claude five-hour and weekly allowance remaining beside estimated remaining at reset and a short forecast status](assets/claude-usage-1.3.png)
@@ -57,6 +70,7 @@ The fourth face keeps scheduled allowance resets separate from optional reset cr
 - Lists the exact expiration date and time of every available banked rate-limit reset
 - Changes from green to amber to red as capacity runs low
 - Highlights Est. Remaining at Reset in muted red with black text when average usage predicts running out before reset
+- Offers a quiet 472 × 40 mini strip combining all three allowances and reset countdowns, with notification-area access and no taskbar button or hover popup
 - Cycles through Codex usage, Codex reset details, Claude usage and Claude reset details with a click; details grow vertically rather than shrinking the text
 - Keeps the main usage body at 290 × 114 logical pixels, with three prominent percentages, labels below them, reset countdown in the title and the progress bar below
 - Shows Claude's five-hour and weekly allowance remaining, a weekly forecast, separate scheduled reset times and optional reset credits, with five-minute account reads
@@ -196,7 +210,7 @@ Beta builds receive newer betas and stable releases; stable builds receive stabl
 
 ### Download a release
 
-Download from [MajorCommand's Releases page](https://github.com/majorcommand/codex-bar/releases/tag/v1.3.0):
+Download from [MajorCommand's Releases page](https://github.com/majorcommand/codex-bar/releases/tag/v1.4.0):
 
 - **Portable ZIP:** `CodexBar-MajorCommand-win-x64-portable.zip` includes the .NET runtime. Extract the entire ZIP into a permanent folder, then run `CodexBar.exe`. This is the simplest option if you do not already have .NET installed.
 - **Lightweight EXE:** `CodexBar.exe` requires the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/en-us/download/dotnet/10.0). The release also includes `LICENSE`, `CHANGELOG.md` and `SHA256SUMS.txt`.
@@ -270,7 +284,8 @@ Install the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/en-us/downloa
 CodexBar.csproj    Windows Forms project configuration
 AppBranding.cs     Public display name, separate from compatible internal identities
 WidgetForm.cs      Widget UI, tray menu, rendering, and refresh behavior
-WidgetForm.Claude.cs  Third-face rendering and account refresh
+WidgetForm.Claude.cs  Claude-page rendering and account refresh
+WidgetForm.MiniStrip.cs  Compact combined strip and isolated preference handling
 ClaudeUsage.cs     Read-only Claude account usage client
 ClaudeCodeRenewal.cs  Bounded native Claude Code credential renewal
 UsagePace.cs       Weekly-cycle average and forecast calculation
@@ -298,6 +313,17 @@ Run the isolated calculation and actual-form checks with:
 ```powershell
 dotnet run --project tests/CodexBar.Checks -c Release -- artifacts/preview-checks
 ```
+
+Build a separate local preview with:
+
+```powershell
+dotnet publish CodexBar.csproj -c Release -r win-x64 --self-contained false -p:MiniStripPreview=true -o dist/mini-strip-preview
+```
+
+Run `dist/mini-strip-preview/CodexBar.exe`. This preview build always starts in isolated preview mode, has a separate single-instance guard,
+and can run alongside the installed tracker. It reads live account usage with the existing clients, uses temporary display preferences,
+and disables startup and notification settings. It does not replace the installed app or save preferences. Claude Code still owns any normal credential renewal.
+The normal build also accepts `--mini-strip-preview` for the same isolated mode. Nothing is installed or published by this command.
 
 The checks render sample faces to the optional output folder. They do not contact Codex, send notifications, or save preferences. Confirm the live executable's click, drag, tray controls and appearance separately after building.
 

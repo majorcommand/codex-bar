@@ -30,8 +30,14 @@ try {
             $drawing.DrawImage($screenshot, [System.Drawing.Rectangle]::new($face.X, 292, 270, [int][Math]::Round($screenshot.Height * 270 / $screenshot.Width)))
         } finally { $screenshot.Dispose() }
     }
-    $drawing.DrawString('github.com/majorcommand/codex-bar', $smallFont, $green, 88, 598)
-    $drawing.DrawString('Illustrative readings', $smallFont, $muted, 1008, 598)
+    $drawing.DrawString('Mini strip', $labelFont, $white, 60, 554)
+    $mini = [System.Drawing.Image]::FromFile((Join-Path $PSScriptRoot 'mini-strip-1.4.png'))
+    try {
+        $drawing.DrawImage($mini, [System.Drawing.Rectangle]::new(205, 546, 566, 48))
+    } finally { $mini.Dispose() }
+    $drawing.DrawString('All limits in one row', $smallFont, $muted, 800, 558)
+    $drawing.DrawString('github.com/majorcommand/codex-bar', $smallFont, $green, 88, 610)
+    $drawing.DrawString('Illustrative readings', $smallFont, $muted, 1008, 610)
     $canvas.Save((Join-Path $PSScriptRoot 'social-preview.png'), [System.Drawing.Imaging.ImageFormat]::Png)
 } finally {
     $titleFont.Dispose(); $labelFont.Dispose(); $smallFont.Dispose()

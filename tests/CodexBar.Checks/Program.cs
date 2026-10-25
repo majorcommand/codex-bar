@@ -608,6 +608,7 @@ internal static partial class Checks
         CheckReleaseUpdateMenu();
         CheckAnnouncementLayouts(output);
         CheckBarAndTray(output);
+        CheckMiniStrip(output);
         if (args.Contains("--live-reset-check"))
         {
             var live = Task.Run(async () =>
@@ -627,11 +628,13 @@ internal static partial class Checks
                 var installed = await client.ReadAsync(EditionVersion.Current);
                 var older = await client.ReadAsync(EditionVersion.Parse("1.2.0-beta.6")!);
                 var stable = await client.ReadAsync(EditionVersion.Parse("1.2.0")!);
-                return (installed, older, stable);
+                var previous = await client.ReadAsync(EditionVersion.Parse("1.3.0")!);
+                return (installed, older, stable, previous);
             }).GetAwaiter().GetResult();
             Check("Live GitHub releases do not offer an update to this release", updates.installed is null);
             Check("Live GitHub release is discoverable by an earlier beta", updates.older?.Version == EditionVersion.Current);
             Check("Live GitHub release is discoverable by stable 1.2.0", updates.stable?.Version == EditionVersion.Current);
+            Check("Live GitHub release is discoverable by stable 1.3.0", updates.previous?.Version == EditionVersion.Current);
         }
         Console.WriteLine($"PASS: {passed} checks. Rendered fixtures: {output ?? "not requested"}");
     }
@@ -643,7 +646,7 @@ internal static partial class Checks
         using var handler = new ResetAnnouncementChecks.Handler((_, _) => Task.FromResult(unavailable
             ? new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.BadGateway)
             : ResetAnnouncementChecks.JsonResponse(newer
-                ? ReleaseUpdateChecks.Releases(ReleaseUpdateChecks.Release("v1.3.1")) : "[]")));
+                ? ReleaseUpdateChecks.Releases(ReleaseUpdateChecks.Release("v1.4.1")) : "[]")));
         using var widget = new WidgetForm(new AppSettings { AlwaysOnTop = false },
             releaseUpdateClient: new ReleaseUpdateClient(handler));
         foreach (var name in new[] { "refreshTimer", "positionSaveTimer", "hoverTimer", "topmostTimer" })
@@ -655,7 +658,7 @@ internal static partial class Checks
         var download = (ToolStripMenuItem)widget.ContextMenuStrip.Items["availableUpdate"]!;
         var originalSize = widget.Size;
         ((Task)Invoke(widget, "RefreshUpdatesAsync", false)!).GetAwaiter().GetResult();
-        Check("Actual form exposes a new stable download without resizing", download.Available && download.Text!.Contains("1.3.1") &&
+        Check("Actual form exposes a new stable download without resizing", download.Available && download.Text!.Contains("1.4.1") &&
             Get(widget, "availableUpdate") is ReleaseUpdate && widget.Size == originalSize);
         ((Task)Invoke(widget, "RefreshUpdatesAsync", true)!).GetAwaiter().GetResult();
         Check("Repeated manual clicks are throttled", handler.Calls == 1);

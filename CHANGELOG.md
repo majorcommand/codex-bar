@@ -2,6 +2,15 @@
 
 All notable changes to the tracker (formerly CodexBar — MajorCommand Edition) are documented here.
 
+## [1.4.0] - 2026-10-25
+
+- Adds an optional 472 × 40 logical-pixel mini strip showing Codex weekly allowance remaining and reset countdown, followed by Claude five-hour and weekly allowances and their separate countdowns.
+- Keeps the strip quiet: no hover popup or expand icon, and no running-window taskbar button in mini mode. The notification-area icon and menu remain available. Drag anywhere to move it; click or press Enter/Space to restore the same full page and its saved taskbar preference.
+- Preserves all four full pages and the original progress-only strip. Normal builds remember the mini-mode preference; the strip fits above the taskbar and restores page position without accumulated drift.
+- Reuses existing account readers, refresh intervals, colours and authentication. A local redraw updates countdowns without extra account requests. Missing, invalid or expired values stay unavailable; stale/offline percentages carry an asterisk and withhold countdowns.
+- Adds an isolated preview launch option with temporary display preferences, a separate single-instance guard and disabled startup/notification changes, so it can be tried alongside an installed copy.
+- Updates screenshots, documentation and release assets. Existing executable names, settings location, startup identity, notifications and manual update procedure remain compatible.
+
 ## [1.3.0] - 2026-10-08
 
 - Splits Claude into compact usage and reset-details pages. The face cycle is Codex usage, Codex resets, Claude usage, Claude resets. Both Codex layouts remain unchanged apart from their four-page numbering.
